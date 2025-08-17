@@ -170,7 +170,7 @@ public static class LayoutConfigManager // make a config manager parent class
 
     public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
     {
-        zoneData = Current.Zones.FirstOrDefault(z => zone.ToIntTuple() == z.Zone?.ToIntTuple());
+        zoneData = Current.Zones.FirstOrDefault(z => z != null && z.IntTuple == zone.ToIntTuple(), null);
         return zoneData != null;
     }
 }
