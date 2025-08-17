@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<!-- Use the following property to set your preferred Thunderstore profile to compile in -->
+		<Profile>Plugin Testing</Profile>
+
+		<!-- Thunderstore author's name as in $(BuildDirectory) -->
+		<Author>Amorously</Author>
+
+		<!-- Name of the dll -->
+		<AssemblyName>AdditionalRundownAdvancements</AssemblyName>
+
+		<!-- Mod manager name -->
+		<ModManager>r2modmanPlus-local</ModManager>
+
+		<BepInEx>$(AppData)\$(ModManager)\GTFO\profiles\$(Profile)\BepInEx</BepInEx>
+		<BuildDirectory>$(BepInEx)\plugins\$(Author)-$(SolutionName)\</BuildDirectory>
+		<RootNamespace>ARA</RootNamespace>
+		<OutputPath>$(BuildDirectory)</OutputPath>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<Platforms>AnyCPU;x64</Platforms>
+		<TargetFramework>net6</TargetFramework>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<DebugType>None</DebugType>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+	  <Folder Include="Patches\" />
+	</ItemGroup>
+	<Target Name="PostBuild" BeforeTargets="PostBuildEvent">
+		<Delete Files="$(OutputPath)$(AssemblyName).deps.json" />
+	</Target>
+
+	<Import Project="Dependencies.props" />
+
+</Project>
