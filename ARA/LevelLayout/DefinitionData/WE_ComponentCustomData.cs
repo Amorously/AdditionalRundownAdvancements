@@ -7,21 +7,11 @@ namespace ARA.LevelLayout.DefinitionData;
 public enum WorldEventComponent
 {
     None,
-    WE_Terminal,
     WE_ChainedPuzzle,
     WE_NavMarker,
     WE_CollisionTrigger,
     WE_LookatTrigger,
     WE_InteractTrigger
-}
-
-public enum TerminalPrefab
-{
-    Default,
-    MiningCover,
-    MiniTerminal,
-    ServiceCover,
-    CyberDeck
 }
 
 public enum ColliderType
@@ -34,8 +24,6 @@ public enum ColliderType
 public sealed class WE_ComponentCustomData
 {
     public WorldEventComponent Type { get; set; } = WorldEventComponent.None;
-    public TerminalPrefab TerminalPrefabType { get; set; } = TerminalPrefab.Default;
-    public Vector3 TerminalPosition { get; set; } = Vector3.zero;
     public PlaceNavMarkerOnGO.eMarkerType NavMarkerType { get; set; } = PlaceNavMarkerOnGO.eMarkerType.Waypoint;
     public bool PlaceOnStart { get; set; } = true;
     public bool IsToggle { get; set; } = false;

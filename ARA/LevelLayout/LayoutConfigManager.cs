@@ -2,31 +2,29 @@
 using AmorLib.Utils.Extensions;
 using ARA.LevelLayout.DefinitionData;
 using FluffyUnderware.DevTools.Extensions;
-using GTFO.API;
 using GTFO.API.Utilities;
 using LevelGeneration;
-using MTFO.API;
 using System.Diagnostics.CodeAnalysis;
 using UnityEngine;
 
 namespace ARA.LevelLayout;
 
-public static class LayoutConfigManager // make a config manager parent class
+public class LayoutConfigManager : CustomConfigBase
 {
     public static LayoutConfigDefinition Current { get; private set; } = LayoutConfigDefinition.Empty;
-
     private static readonly Dictionary<string, HashSet<uint>> _filepathLayoutMap = new();
     private static readonly Dictionary<uint, LayoutConfigDefinition> _customLayoutData = new();
-    
-    public static string ModulePath { get; private set; } = string.Empty;  
 
-    // elevator cargo handled in patch
-    // portal chained puzzle handled in patch
-    // force gen cluster mark handled in patch
-
-    static LayoutConfigManager() 
+    public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
     {
-        ModulePath = Path.Combine(MTFOPathAPI.CustomPath, EntryPoint.MODNAME);
+        zoneData = Current.Zones.FirstOrDefault(z => z != null && z.IntTuple == zone.ToIntTuple(), null);
+        return zoneData != null;
+    }
+
+    public override string ModulePath => Module + "/LevelLayout";
+
+    public override void Setup() 
+    {
         Directory.CreateDirectory(ModulePath);
 
         //if (Configuration.CreateTemplate)
@@ -49,11 +47,8 @@ public static class LayoutConfigManager // make a config manager parent class
         listener.FileCreated += FileCreatedOrChanged;
         listener.FileChanged += FileCreatedOrChanged;
         listener.FileDeleted += FileDeleted;
+    }
 
-        LevelAPI.OnBuildStart += OnBuildStart;
-        LevelAPI.OnBeforeBuildBatch += OnBeforeBuildBatch;        
-    }   
-    
     private static void ReadFileContent(string file, string content)
     {
         var layoutSet = _filepathLayoutMap.GetOrAddNew(file);
@@ -72,7 +67,7 @@ public static class LayoutConfigManager // make a config manager parent class
         }
     }
 
-    private static void FileCreatedOrChanged(LiveEditEventArgs e)
+    private void FileCreatedOrChanged(LiveEditEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file changed: {e.FullPath}");
         LiveEdit.TryReadFileContent(e.FullPath, (content) =>
@@ -81,7 +76,7 @@ public static class LayoutConfigManager // make a config manager parent class
         });
     }
     
-    private static void FileDeleted(LiveEditEventArgs e)
+    private void FileDeleted(LiveEditEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file deleted: {e.FullPath}");
         LiveEdit.TryReadFileContent(e.FullPath, (content) =>
@@ -94,13 +89,13 @@ public static class LayoutConfigManager // make a config manager parent class
         });
     }
 
-    private static void OnBuildStart()
+    public override void OnBuildStart()
     {
         var layout = RundownManager.ActiveExpedition.LevelLayoutData;
         Current = _customLayoutData.TryGetValue(layout, out var config) ? config : LayoutConfigDefinition.Empty;
     }
 
-    private static void OnBeforeBuildBatch(LG_Factory.BatchName batch)
+    public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
     {
         if (batch == LG_Factory.BatchName.CustomObjectCollection)
         {
@@ -108,17 +103,28 @@ public static class LayoutConfigManager // make a config manager parent class
         }
     }
 
-    public static void ApplyLayoutData()
+    public override void OnEnterLevel() // fix cargo with dimension level layouts
     {
+        var cage = UnityEngine.Object.FindObjectOfType<ElevatorCargoCage>();
+        if (cage == null) return;
+        foreach (var cargo in cage.GetComponentsInChildren<ItemCuller>())
+        {
+            cargo.MoveToNode(Builder.GetElevatorArea().m_courseNode.m_cullNode, cage.transform.position);
+        }
+    }
+
+    private static void ApplyLayoutData()
+    {
+        ARALogger.Debug("Applying layout data");
         foreach (var zone in Builder.CurrentFloor.allZones)
         {
-            if (Current.AllWorldEventTerminals)
+            if (Current.AllWorldEventTerminals) // doesn't get the reactor terminal rn
             {
                 for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
                 {
                     var term = zone.TerminalsSpawnedInZone[i];
                     var parentMarker = term.GetComponentInParent<LG_MarkerProducer>();
-                    if (parentMarker == null || parentMarker.GetComponentInChildren<LG_WorldEventObject>() != null) continue;
+                    if (parentMarker == null) continue;
                     string name = $"WE_ARA_Term_{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{i}";
                     var weTerm = parentMarker.AddChildGameObject<LG_WorldEventObject>(name);
                     weTerm.transform.localPosition = Vector3.zero;
@@ -142,8 +148,6 @@ public static class LayoutConfigManager // make a config manager parent class
                 {
                     switch (weComp.Type)
                     {
-                        case WorldEventComponent.WE_Terminal:
-
                         case WorldEventComponent.WE_ChainedPuzzle:
                             weObj.gameObject.AddComponent<LG_WorldEventChainPuzzle>();
                             break;
@@ -166,11 +170,5 @@ public static class LayoutConfigManager // make a config manager parent class
                 }
             }
         }
-    }
-
-    public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
-    {
-        zoneData = Current.Zones.FirstOrDefault(z => z != null && z.IntTuple == zone.ToIntTuple(), null);
-        return zoneData != null;
-    }
+    }    
 }

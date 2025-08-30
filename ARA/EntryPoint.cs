@@ -1,14 +1,12 @@
 ﻿using AmorLib.Dependencies;
-using ARA.LevelLayout;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using GTFO.API;
 using HarmonyLib;
-using System.Runtime.CompilerServices;
 
 namespace ARA;
 
-[BepInPlugin("Amor.ARA", "AdditionalRundownAdvancements", "0.0.1")]
+[BepInPlugin("Amor.ARA", MODNAME, "0.1.0")]
 [BepInDependency("dev.gtfomodding.gtfo-api", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("com.dak.MTFO", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("Amor.AmorLib", BepInDependency.DependencyFlags.HardDependency)]
@@ -26,6 +24,9 @@ internal sealed class EntryPoint : BasePlugin
 
     private void OnStartupAssetsLoaded()
     {
-        RuntimeHelpers.RunClassConstructor(typeof(LayoutConfigManager).TypeHandle);
+        var configs = AccessTools.GetTypesFromAssembly(GetType().Assembly)
+            .Where(t => typeof(CustomConfigBase).IsAssignableFrom(t) && !t.IsAbstract)
+            .Select(t => (CustomConfigBase)Activator.CreateInstance(t)!);
+        CustomConfigManager.Setup(configs);
     }
 }
