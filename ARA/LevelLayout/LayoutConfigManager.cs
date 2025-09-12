@@ -14,11 +14,27 @@ public class LayoutConfigManager : CustomConfigBase
     public static LayoutConfigDefinition Current { get; private set; } = LayoutConfigDefinition.Empty;
     private static readonly Dictionary<string, HashSet<uint>> _filepathLayoutMap = new();
     private static readonly Dictionary<uint, LayoutConfigDefinition> _customLayoutData = new();
+    private static readonly Dictionary<Vector3, TerminalCustomPrefabContainer> _positionTerminalContainerMap = new();
 
     public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
     {
         zoneData = Current.Zones.FirstOrDefault(z => z != null && z.IntTuple == zone.ToIntTuple(), null);
         return zoneData != null;
+    }
+
+    public static bool TryGetTerminalPrefabContainer(Vector3 position, [MaybeNullWhen(false)] out TerminalCustomPrefabContainer container)
+    {
+        foreach (var kvp in _positionTerminalContainerMap)
+        {
+            if (kvp.Key.Approximately(position))
+            {
+                container = kvp.Value;
+                return true;
+            }
+        }
+
+        container = null;
+        return false;
     }
 
     public override string ModulePath => Module + "/LevelLayout";
@@ -93,14 +109,14 @@ public class LayoutConfigManager : CustomConfigBase
     {
         var layout = RundownManager.ActiveExpedition.LevelLayoutData;
         Current = _customLayoutData.TryGetValue(layout, out var config) ? config : LayoutConfigDefinition.Empty;
+        _positionTerminalContainerMap.Clear();
     }
 
     public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
     {
-        if (batch == LG_Factory.BatchName.CustomObjectCollection)
-        {
-            ApplyLayoutData();
-        }
+        if (batch != LG_Factory.BatchName.CustomObjectCollection) return;
+        ARALogger.Debug("Applying layout data");
+        ApplyLayoutData();
     }
 
     public override void OnEnterLevel() // fix cargo with dimension level layouts
@@ -115,9 +131,9 @@ public class LayoutConfigManager : CustomConfigBase
 
     private static void ApplyLayoutData()
     {
-        ARALogger.Debug("Applying layout data");
         foreach (var zone in Builder.CurrentFloor.allZones)
         {
+            /* Setup All WE Terminals */
             if (Current.AllWorldEventTerminals) // doesn't get the reactor terminal rn
             {
                 for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
@@ -134,20 +150,28 @@ public class LayoutConfigManager : CustomConfigBase
             
             if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) continue;
 
+            /* Add Spawnpoints to Zone Areas */
             zoneData.AddSpawnPoints();
 
+            /* Add Custom WE Objects */
             foreach (var weData in zoneData.WorldEventObjects)
             {
                 if (!weData.IsAreaIndexValid(zone, out var area)) continue;
                 var weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
-                weObj.transform.SetPositionAndRotation(!weData.UseRandomPosition ? weData.Position : area.m_courseNode.GetRandomPositionInside(), Quaternion.Euler(weData.Rotation));
+                if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
+                weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
                 weObj.transform.localScale = weData.Scale;
-                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>(); 
 
+                /* Setup Custom WE Component(s) */
                 foreach (var weComp in weData.Components)
                 {
                     switch (weComp.Type)
                     {
+                        case WorldEventComponent.WE_Terminal when weComp.TerminalPrefabOverride != TerminalPrefab.None:
+                            _positionTerminalContainerMap[weData.Position] = new(weData.WorldEventObjectFilter, area.m_courseNode, weComp.TerminalPrefabOverride);
+                            break;
+
                         case WorldEventComponent.WE_ChainedPuzzle:
                             weObj.gameObject.AddComponent<LG_WorldEventChainPuzzle>();
                             break;
@@ -162,9 +186,6 @@ public class LayoutConfigManager : CustomConfigBase
                         case WorldEventComponent.WE_CollisionTrigger:
                         case WorldEventComponent.WE_LookatTrigger:
                         case WorldEventComponent.WE_InteractTrigger:
-                            break;
-
-                        default:
                             break;
                     }
                 }

@@ -11,7 +11,8 @@ public enum WorldEventComponent
     WE_NavMarker,
     WE_CollisionTrigger,
     WE_LookatTrigger,
-    WE_InteractTrigger
+    WE_InteractTrigger,
+    WE_Terminal
 }
 
 public enum ColliderType
@@ -24,6 +25,7 @@ public enum ColliderType
 public sealed class WE_ComponentCustomData
 {
     public WorldEventComponent Type { get; set; } = WorldEventComponent.None;
+    public TerminalPrefab TerminalPrefabOverride { get; set; } = TerminalPrefab.None;
     public PlaceNavMarkerOnGO.eMarkerType NavMarkerType { get; set; } = PlaceNavMarkerOnGO.eMarkerType.Waypoint;
     public bool PlaceOnStart { get; set; } = true;
     public bool IsToggle { get; set; } = false;

@@ -12,7 +12,8 @@ public sealed class WE_ObjectCustomData
     public Vector3 Position { get; set; } = Vector3.zero;
     public Vector3 Rotation { get; set;} = Vector3.zero;
     public Vector3 Scale { get; set; } = Vector3.one;
-    public List<WE_ComponentCustomData> Components { get; set; } = new();
+    public HashSet<WE_ComponentCustomData> Components { get; set; } = new();
+    //public Dictionary<WorldEventComponent, WE_ComponentCustomData> Components = new();
 
     public bool IsAreaIndexValid(LG_Zone zone, [MaybeNullWhen(false)] out LG_Area area)
     {

@@ -7,7 +7,7 @@ using LevelGeneration;
 namespace ARA.Patches;
 
 [HarmonyPatch(typeof(LG_DistributionJobUtils), nameof(LG_DistributionJobUtils.GetRandomNodeFromZoneForFunction))]
-internal static class GeneratorClusterPatch // credits: pumba
+internal static class GeneratorClusterPatch // credits: pumba https://discord.com/channels/782438773690597389/783918553626836992/1407177782093414490
 {
     [HarmonyPrefix]
     [HarmonyWrapSafe]
