@@ -10,7 +10,7 @@
 		<AssemblyName>AdditionalRundownAdvancements</AssemblyName>
 
 		<!-- Mod manager name -->
-		<ModManager>r2modmanPlus-local</ModManager>
+		<ModManager>com.kesomannen.gale</ModManager>
 
 		<BepInEx>$(AppData)\$(ModManager)\GTFO\profiles\$(Profile)\BepInEx</BepInEx>
 		<BuildDirectory>$(BepInEx)\plugins\$(Author)-$(SolutionName)\</BuildDirectory>

@@ -1,19 +1,25 @@
-﻿using ARA.LevelLayout;
+﻿using AmorLib.Utils.Extensions;
+using ARA.LevelLayout;
+using ARA.LevelLayout.DefinitionData;
 using BepInEx;
 using BepInEx.Unity.IL2CPP.Hook;
 using GameData;
 using GTFO.API;
 using GTFO.API.Extensions;
+using HarmonyLib;
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.Runtime;
 using Il2CppInterop.Runtime.Runtime.VersionSpecific.MethodInfo;
 using Il2CppSystem.Reflection;
 using LevelGeneration;
+using Player;
 using UnityEngine;
+using XXHashing;
 
 namespace ARA.Patches;
 
-internal static class SpecificTerminalNativePatch
+[HarmonyPatch]
+internal static class WorldEventUtilsPatches
 {
     private static INativeDetour? ForceSpawnMarkerDetour;
     private static d_ForceSpawnMarker? orig_ForceSpawnMarker;
@@ -27,26 +33,24 @@ internal static class SpecificTerminalNativePatch
         ExpeditionFunction wantedFunc, 
         out IntPtr spawnedObject, 
         Il2CppMethodInfo* methodInfo
-    );    
+    );
 
-    internal unsafe static void ApplyNativePatch()
+    [HarmonyPrepare]
+    private unsafe static void ApplyNativePatch()
     {
-        var type = typeof(WorldEventUtils);
-        var classPtr = IL2CPP.GetIl2CppClass(type.Module.Name, string.Empty, type.Name);
-
-        ForceSpawnMarkerDetour = CreateGenericStaticDetour<d_ForceSpawnMarker>
+        ForceSpawnMarkerDetour ??= CreateGenericStaticDetour<d_ForceSpawnMarker>
         (
-            classPtr,
+            typeof(WorldEventUtils),
             nameof(WorldEventUtils.TryForceSpawnMarkerResult),
-            "System.bool",
-            new string[] 
+            typeof(bool).FullName!,
+            new string[]
             {
-                nameof(Vector3),
-                nameof(Quaternion),
-                nameof(Transform),
-                "System.uint",
-                "System.int",
-                nameof(ExpeditionFunction),
+                typeof(UnityEngine.Vector3).FullName!,                   
+                typeof(UnityEngine.Quaternion).FullName!,         
+                typeof(UnityEngine.Transform).FullName!, 
+                typeof(uint).FullName!,    
+                typeof(int).FullName!,   
+                typeof(GameData.ExpeditionFunction).FullName!,
                 typeof(GameObject).MakeByRefType().FullName!
             },
             new Type[]
@@ -58,12 +62,73 @@ internal static class SpecificTerminalNativePatch
         );
     }
 
-    private static unsafe INativeDetour CreateGenericStaticDetour<TDelegate>(IntPtr classPtr, string methodName, string returnType, string[] paramTypes, Type[] genericArguments, TDelegate to, out TDelegate original)
+    [HarmonyPatch(typeof(WorldEventUtils), nameof(WorldEventUtils.TrySpawnItemOnAlign))]
+    [HarmonyPrefix]
+    [HarmonyWrapSafe]
+    private static bool Pre_TryForceSpawnItem(Transform itemAlign, out SpecificDataContainer? __state)
+    {
+        return !LayoutConfigManager.TryGetSpecificDataContainer(itemAlign.position, out __state);
+    }
+
+    [HarmonyPatch(typeof(WorldEventUtils), nameof(WorldEventUtils.TrySpawnItemOnAlign))]
+    [HarmonyPostfix]
+    [HarmonyWrapSafe]
+    private static void Post_TryForceSpawnItem(ref bool __result, bool __runOriginal, uint itemID, Transform itemAlign, uint seed, ref ItemInLevel spawnedItem, SpecificDataContainer? __state)
+    {
+        if (__runOriginal || __state == null) return;
+
+        var block = ItemDataBlock.GetBlock(itemID);
+        if (block == null || !block.internalEnabled)
+        {
+            ARALogger.Error($"Failed to find enabled ItemDataBlock {itemID}!");
+            return;
+        }
+        var item = LG_PickupItem.SpawnGenericPickupItem(itemAlign);
+        item.SpawnNode = __state.SpawnNode;
+
+        int hash = (int)XXHash.Hash(seed, 0, false);
+        switch (block.inventorySlot)
+        {
+            case InventorySlot.Consumable:
+                item.SetupAsConsumable(hash, itemID);
+                break;
+
+            case InventorySlot.ConsumableHeavy:
+            case InventorySlot.InLevelCarry:
+                item.SetupAsBigPickupItem(hash, itemID, false, 0);
+                break;
+
+            case InventorySlot.InPocket:
+            case InventorySlot.Pickup:
+                item.SetupAsSmallGenericPickup(hash, itemID, false);
+                break;
+
+            default:
+                ARALogger.Error($"Unknown item type {block.inventorySlot} for ItemDataBlock {itemID}!");
+                return;
+        }
+
+        spawnedItem = item.GetComponentInChildren<ItemInLevel>();
+        spawnedItem.GetSyncComponent().add_OnSyncStateChange((Action<ePickupItemStatus, pPickupPlacement, PlayerAgent, bool>)((status, pickupPlacement, player, value) =>
+        {
+            if (status == ePickupItemStatus.PickedUp)
+            {                
+                while (__state.EventsOnPickup.Count > 0)
+                {
+                    WardenObjectiveManager.CheckAndExecuteEventsOnTrigger(__state.EventsOnPickup.Dequeue(), eWardenObjectiveEventTrigger.None, true);
+                }
+            }
+        }));
+        __result = spawnedItem != null;        
+    }
+
+    private unsafe static INativeDetour CreateGenericStaticDetour<TDelegate>(Type classType, string methodName, string returnType, string[] paramTypes, Type[] genericArguments, TDelegate to, out TDelegate original)
             where TDelegate : Delegate
     {
+        var classPtr = IL2CPP.GetIl2CppClass(classType.Module.Name, string.Empty, classType.Name);
         if (classPtr == IntPtr.Zero)
         {
-            ARALogger.Error($"Failed to get class pointer for {nameof(WorldEventUtils)}?");
+            ARALogger.Error($"Failed to get class pointer for {methodName}?");
             original = null!;
             return null!;
         }
@@ -83,7 +148,7 @@ internal static class SpecificTerminalNativePatch
         Vector3 pos = *(Vector3*)position;
         Quaternion rot = *(Quaternion*)rotation;        
 
-        if (!LayoutConfigManager.TryGetTerminalPrefabContainer(pos, out var container))
+        if (!LayoutConfigManager.TryGetSpecificDataContainer(pos, out var container))
         {
             orig_ForceSpawnMarker!(position, rotation, parent, markerBlockID, index, wantedFunc, out spawnedObject, methodInfo);
             return spawnedObject != IntPtr.Zero;
@@ -95,7 +160,7 @@ internal static class SpecificTerminalNativePatch
         {
             string prefab = container.GetCustomPrefabs(out var extraPrefab);
             var go = AssetAPI.GetLoadedAsset<GameObject>(prefab);
-            terminal = InstantiatePrefabSpawners(go, pos, rot, transform);
+            terminal = go.ClonePrefabSpawners(pos, rot, transform);
             if (terminal.GetComponentInChildren<LG_ComputerTerminal>() == null && !extraPrefab.IsNullOrWhiteSpace())
             {
                 bool isSpawned = false;
@@ -104,7 +169,7 @@ internal static class SpecificTerminalNativePatch
                     if (!isSpawned && HasTerminalMarker(marker.MarkerDataBlockType, marker.MarkerDataBlockID))
                     {
                         var go2 = AssetAPI.GetLoadedAsset<GameObject>(extraPrefab);
-                        terminal = InstantiatePrefabSpawners(go2, marker.transform.position, marker.transform.rotation, marker.transform.parent);
+                        terminal = go2.ClonePrefabSpawners(marker.transform.position, marker.transform.rotation, marker.transform.parent);
                         isSpawned = true;
                     }
                     marker.gameObject.SetActive(false);
@@ -114,7 +179,8 @@ internal static class SpecificTerminalNativePatch
         catch (Exception ex)
         {
             ARALogger.Error($"Unable to load custom terminal prefab(s), is the correct complex loaded?\n{ex}");
-            return false;
+            orig_ForceSpawnMarker!(position, rotation, parent, markerBlockID, index, wantedFunc, out spawnedObject, methodInfo);
+            return spawnedObject != IntPtr.Zero;
         }
 
         terminal.name = container.WorldEventObjectFilter;
@@ -145,36 +211,5 @@ internal static class SpecificTerminalNativePatch
             default:
                 return false;
         }
-    }
-
-    private static GameObject InstantiatePrefabSpawners(GameObject original, Vector3 position, Quaternion rotation, Transform parent)
-    {
-        var clone = UnityEngine.Object.Instantiate(original, position, rotation, parent);
-
-        foreach (var spawner in clone.GetComponentsInChildren<LG_PrefabSpawner>())
-        {
-            try
-            {
-                GameObject prefab = UnityEngine.Object.Instantiate(spawner.m_prefab, spawner.transform.position, spawner.transform.rotation, spawner.transform.parent);
-                if (spawner.m_disableCollision)
-                {
-                    foreach (Collider collider in prefab.GetComponentsInChildren<Collider>())
-                    { 
-                        collider.enabled = false; 
-                    }
-                }
-                if (spawner.m_applyScale)
-                {
-                    prefab.transform.localScale = spawner.transform.localScale;
-                }
-                prefab.transform.SetParent(spawner.transform);
-            }
-            catch
-            {
-                continue;
-            }
-        }
-
-        return clone;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using AmorLib.Utils.JsonElementConverters;
+using GameData;
 using UnityEngine;
 using UnityEngine.Animations;
 
@@ -12,7 +13,8 @@ public enum WorldEventComponent
     WE_CollisionTrigger,
     WE_LookatTrigger,
     WE_InteractTrigger,
-    WE_Terminal
+    WE_SpecificTerminal,
+    WE_SpecificPickup
 }
 
 public enum ColliderType
@@ -24,8 +26,8 @@ public enum ColliderType
 
 public sealed class WE_ComponentCustomData
 {
-    public WorldEventComponent Type { get; set; } = WorldEventComponent.None;
-    public TerminalPrefab TerminalPrefabOverride { get; set; } = TerminalPrefab.None;
+    public TerminalPrefab PrefabOverride { get; set; } = TerminalPrefab.None;
+    public List<WardenObjectiveEventData> EventsOnPickup { get; set; } = new();
     public PlaceNavMarkerOnGO.eMarkerType NavMarkerType { get; set; } = PlaceNavMarkerOnGO.eMarkerType.Waypoint;
     public bool PlaceOnStart { get; set; } = true;
     public bool IsToggle { get; set; } = false;

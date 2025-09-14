@@ -11,7 +11,7 @@ internal static class GeneratorClusterPatch // credits: pumba https://discord.co
 {
     [HarmonyPrefix]
     [HarmonyWrapSafe]
-    public static bool ForceGeneratorClusterSpawn(LG_Zone zone, ExpeditionFunction func, float randomValue, ref AIG_CourseNode __result)
+    public static bool ForceGeneratorClusterSpawn(ref AIG_CourseNode __result, LG_Zone zone, ExpeditionFunction func, float randomValue)
     {
         if (func != ExpeditionFunction.GeneratorCluster) return true;
         else if (!LayoutConfigManager.TryGetCurrentZoneData(zone, out var custom) || !custom.ForceGeneratorClusterMarkers) return true;

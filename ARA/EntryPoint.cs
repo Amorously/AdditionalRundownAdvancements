@@ -1,5 +1,4 @@
 ﻿using AmorLib.Dependencies;
-using ARA.Patches;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using GTFO.API;
@@ -19,7 +18,6 @@ internal sealed class EntryPoint : BasePlugin
     public override void Load()
     {
         new Harmony("Amor.ARA").PatchAll();
-        SpecificTerminalNativePatch.ApplyNativePatch();
         AssetAPI.OnStartupAssetsLoaded += OnStartupAssetsLoaded; 
         ARALogger.Info("ARA is done loading!");
     }
