@@ -42,14 +42,14 @@ public sealed class SpecificDataContainer
     public string WorldEventObjectFilter;
     public AIG_CourseNode SpawnNode;
     public TerminalPrefab TerminalPrefabOverride;
-    public Queue<WardenObjectiveEventData> EventsOnPickup;
+    public List<WardenObjectiveEventData> EventsOnPickup;
 
     public SpecificDataContainer(string filter, AIG_CourseNode node, TerminalPrefab prefabType, List<WardenObjectiveEventData> events)
     {
         WorldEventObjectFilter = filter;
         SpawnNode = node;
         TerminalPrefabOverride = prefabType;
-        EventsOnPickup = new(events);
+        EventsOnPickup = events;
     }
 
     public string GetCustomPrefabs(out string? extraPrefab)

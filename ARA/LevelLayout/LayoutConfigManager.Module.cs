@@ -13,7 +13,7 @@ public partial class LayoutConfigManager
         foreach (var zone in Builder.CurrentFloor.allZones)
         {
             /* Setup All WE Terminals */
-            if (Current.AllWorldEventTerminals)
+            if (Current.AllWorldEventTerminals) 
             {
                 SetupAllWETerminals(zone);
             }
@@ -27,11 +27,14 @@ public partial class LayoutConfigManager
             foreach (var weData in zoneData.WorldEventObjects)
             {
                 if (!weData.IsAreaIndexValid(zone, out var area)) continue;
-                var weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
-                if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
-                weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
-                weObj.transform.localScale = weData.Scale;
-                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>(); 
+                if (!weData.UseExistingFilterInArea || !TryGetWorldEventInArea(weData.WorldEventObjectFilter, area, out var weObj))
+                {
+                    weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
+                    if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
+                    weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
+                    weObj.transform.localScale = weData.Scale;
+                    weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                }
 
                 /* Setup Custom WE Component(s) */
                 foreach ((var type, var weComp) in weData.Components)
@@ -44,14 +47,14 @@ public partial class LayoutConfigManager
                             break;
 
                         case WorldEventComponent.WE_ChainedPuzzle:
-                            weObj.gameObject.AddComponent<LG_WorldEventChainPuzzle>();
+                            weObj.gameObject.AddOrGetComponent<LG_WorldEventChainPuzzle>();
                             break;
 
                         case WorldEventComponent.WE_NavMarker:
-                            var weNav = weObj.gameObject.AddComponent<PlaceNavMarkerOnGO>();
+                            var weNav = weObj.gameObject.AddOrGetComponent<PlaceNavMarkerOnGO>();
                             weNav.type = weComp.NavMarkerType;
                             weNav.m_placeOnStart = weComp.PlaceOnStart;
-                            weObj.gameObject.AddComponent<LG_WorldEventNavMarker>();
+                            weObj.gameObject.AddOrGetComponent<LG_WorldEventNavMarker>();
                             break;
 
                         case WorldEventComponent.WE_CollisionTrigger:

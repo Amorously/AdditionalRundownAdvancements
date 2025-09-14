@@ -38,6 +38,16 @@ public partial class LayoutConfigManager : CustomConfigBase
         return false;
     }
 
+    public static bool TryGetWorldEventInArea(string filter, LG_Area area, out LG_WorldEventObject weObj)
+    {
+        bool hasFilter = WorldEventUtils.TryGetRandomWorldEventObjectFromFilter(filter, (uint)Builder.SessionSeedRandom.Seed, out weObj);
+        if (!hasFilter || !weObj.enabled) return false;
+        Vector3 pos = weObj.transform.position;
+        eDimensionIndex dim = Dimension.GetDimensionFromPos(pos).DimensionIndex;
+        var node = CourseNodeUtil.GetCourseNode(pos, dim);
+        return node?.m_area.GetInstanceID() == area.GetInstanceID();
+    }
+
     public override string ModulePath => Module + "/LevelLayout";
 
     public override void Setup() 

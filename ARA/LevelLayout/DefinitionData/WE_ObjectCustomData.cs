@@ -8,6 +8,7 @@ public sealed class WE_ObjectCustomData
 {
     public string WorldEventObjectFilter { get; set; } = string.Empty;
     public int AreaIndex { get; set; } = 0;
+    public bool UseExistingFilterInArea { get; set; } = false;
     public bool UseRandomPosition { get; set; } = false;
     public Vector3 Position { get; set; } = Vector3.zero;
     public Vector3 Rotation { get; set;} = Vector3.zero;

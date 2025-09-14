@@ -108,14 +108,20 @@ internal static class WorldEventUtilsPatches
                 return;
         }
 
-        spawnedItem = item.GetComponentInChildren<ItemInLevel>();
-        spawnedItem.GetSyncComponent().add_OnSyncStateChange((Action<ePickupItemStatus, pPickupPlacement, PlayerAgent, bool>)((status, pickupPlacement, player, value) =>
+        spawnedItem = item.GetComponentInChildren<ItemInLevel>();        
+        Queue<WardenObjectiveEventData> eData = new(__state.EventsOnPickup);
+        spawnedItem?.GetSyncComponent().add_OnSyncStateChange((Action<ePickupItemStatus, pPickupPlacement, PlayerAgent, bool>)((status, placement, _, isRecall) =>
         {
-            if (status == ePickupItemStatus.PickedUp)
-            {                
-                while (__state.EventsOnPickup.Count > 0)
+            if ((!placement.hasBeenPickedUp || !placement.linkedToMachine) && isRecall)
+            {
+                ARALogger.Warn($"isRecall for SpecificDataContainer {__state.WorldEventObjectFilter}; restore EventsOnPickup");
+                eData = new(__state.EventsOnPickup);
+            }
+            if (status == ePickupItemStatus.PickedUp && !isRecall)
+            {
+                while (eData.Count > 0)
                 {
-                    WardenObjectiveManager.CheckAndExecuteEventsOnTrigger(__state.EventsOnPickup.Dequeue(), eWardenObjectiveEventTrigger.None, true);
+                    WardenObjectiveManager.CheckAndExecuteEventsOnTrigger(eData.Dequeue(), eWardenObjectiveEventTrigger.None, true);
                 }
             }
         }));
