@@ -38,16 +38,6 @@ public partial class LayoutConfigManager : CustomConfigBase
         return false;
     }
 
-    public static bool TryGetWorldEventInArea(string filter, LG_Area area, out LG_WorldEventObject weObj)
-    {
-        bool hasFilter = WorldEventUtils.TryGetRandomWorldEventObjectFromFilter(filter, (uint)Builder.SessionSeedRandom.Seed, out weObj);
-        if (!hasFilter || !weObj.enabled) return false;
-        Vector3 pos = weObj.transform.position;
-        eDimensionIndex dim = Dimension.GetDimensionFromPos(pos).DimensionIndex;
-        var node = CourseNodeUtil.GetCourseNode(pos, dim);
-        return node?.m_area.GetInstanceID() == area.GetInstanceID();
-    }
-
     public override string ModulePath => Module + "/LevelLayout";
 
     public override void Setup() 
@@ -126,8 +116,21 @@ public partial class LayoutConfigManager : CustomConfigBase
     public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
     {
         if (batch != LG_Factory.BatchName.CustomObjectCollection) return;
+        
+        Dictionary<int, List<LG_WorldEventObject>> preAllocWE = new(); // map existing WE objects
+        foreach (var weObj in UnityEngine.Object.FindObjectsOfType<LG_WorldEventObject>())
+        {
+            Vector3 pos = weObj.transform.position;
+            eDimensionIndex dim = Dimension.GetDimensionFromPos(pos).DimensionIndex;
+            var area = CourseNodeUtil.GetCourseNode(pos, dim).m_area;
+            preAllocWE.GetOrAddNew(area.GetInstanceID()).Add(weObj);
+        }
+
         ARALogger.Debug("Applying layout data");
-        ApplyLayoutData();
+        foreach (var zone in Builder.CurrentFloor.allZones)
+        {
+            ApplyLayoutData(zone, preAllocWE);
+        }
     }
 
     public override void OnEnterLevel() // fix cargo with dimension level layouts

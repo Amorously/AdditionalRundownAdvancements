@@ -8,66 +8,63 @@ namespace ARA.LevelLayout;
 
 public partial class LayoutConfigManager
 {
-    private static void ApplyLayoutData()
+    private static void ApplyLayoutData(LG_Zone zone, Dictionary<int, List<LG_WorldEventObject>> preAllocWE)
     {
-        foreach (var zone in Builder.CurrentFloor.allZones)
+       /* Setup All WE Terminals */
+        if (Current.AllWorldEventTerminals) 
         {
-            /* Setup All WE Terminals */
-            if (Current.AllWorldEventTerminals) 
-            {
-                SetupAllWETerminals(zone);
-            }
+            AddWorldEventToTerminals(zone);
+        }
             
-            if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) continue;
+        if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) return;
 
-            /* Add Spawnpoints to Zone Areas */
-            zoneData.AddSpawnPoints();
+        /* Add Spawnpoints to Zone Areas */
+        zoneData.AddSpawnPoints();
 
-            /* Add Custom WE Objects */
-            foreach (var weData in zoneData.WorldEventObjects)
+        /* Add Custom WE Objects */
+        foreach (var weData in zoneData.WorldEventObjects)
+        {
+            if (!weData.IsAreaIndexValid(zone, out var area)) continue;
+            if (!weData.UseExistingFilterInArea || !weData.TryGetExistingFilterInArea(preAllocWE, area, out var weObj))
             {
-                if (!weData.IsAreaIndexValid(zone, out var area)) continue;
-                if (!weData.UseExistingFilterInArea || !TryGetWorldEventInArea(weData.WorldEventObjectFilter, area, out var weObj))
-                {
-                    weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
-                    if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
-                    weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
-                    weObj.transform.localScale = weData.Scale;
-                    weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                }
+                weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
+                if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
+                weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
+                weObj.transform.localScale = weData.Scale;
+                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+            }
 
-                /* Setup Custom WE Component(s) */
-                foreach ((var type, var weComp) in weData.Components)
-                {
-                    switch (type)
-                    {                        
-                        case WorldEventComponent.WE_SpecificTerminal when weComp.PrefabOverride != TerminalPrefab.None:
-                        case WorldEventComponent.WE_SpecificPickup:
-                            _positionToContainerMap[weData.Position] = new(weData.WorldEventObjectFilter, area.m_courseNode, weComp.PrefabOverride, weComp.EventsOnPickup);
-                            break;
+            /* Setup Custom WE Components */
+            foreach ((var type, var weComp) in weData.Components)
+            {
+                switch (type)
+                {                        
+                    case WorldEventComponent.WE_SpecificTerminal when weComp.PrefabOverride != TerminalPrefab.None:
+                    case WorldEventComponent.WE_SpecificPickup:
+                        _positionToContainerMap[weData.Position] = new(weData.WorldEventObjectFilter, area.m_courseNode, weComp.PrefabOverride, weComp.EventsOnPickup);
+                        break;
 
-                        case WorldEventComponent.WE_ChainedPuzzle:
-                            weObj.gameObject.AddOrGetComponent<LG_WorldEventChainPuzzle>();
-                            break;
+                    case WorldEventComponent.WE_ChainedPuzzle:
+                        weObj.gameObject.AddOrGetComponent<LG_WorldEventChainPuzzle>();
+                        break;
 
-                        case WorldEventComponent.WE_NavMarker:
-                            var weNav = weObj.gameObject.AddOrGetComponent<PlaceNavMarkerOnGO>();
-                            weNav.type = weComp.NavMarkerType;
-                            weNav.m_placeOnStart = weComp.PlaceOnStart;
-                            weObj.gameObject.AddOrGetComponent<LG_WorldEventNavMarker>();
-                            break;
+                    case WorldEventComponent.WE_NavMarker:
+                        var weNav = weObj.gameObject.AddOrGetComponent<PlaceNavMarkerOnGO>();
+                        weNav.type = weComp.NavMarkerType;
+                        weNav.m_placeOnStart = weComp.PlaceOnStart;
+                        weObj.gameObject.AddOrGetComponent<LG_WorldEventNavMarker>();
+                        break;
 
-                        case WorldEventComponent.WE_CollisionTrigger:
-                        case WorldEventComponent.WE_LookatTrigger:
-                        case WorldEventComponent.WE_InteractTrigger:
-                            break;
-                    }
+                    case WorldEventComponent.WE_CollisionTrigger:
+                    case WorldEventComponent.WE_LookatTrigger:
+                    case WorldEventComponent.WE_InteractTrigger:
+                        break;
                 }
             }
         }
-    }    
+    }
 
-    private static void SetupAllWETerminals(LG_Zone zone)
+    private static void AddWorldEventToTerminals(LG_Zone zone)
     {
         for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
         {

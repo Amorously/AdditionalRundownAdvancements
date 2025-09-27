@@ -1,4 +1,5 @@
-﻿using LevelGeneration;
+﻿using AmorLib.Utils.Extensions;
+using LevelGeneration;
 using System.Diagnostics.CodeAnalysis;
 using UnityEngine;
 
@@ -26,5 +27,17 @@ public sealed class WE_ObjectCustomData
         ARALogger.Error($"Invalid AreaIndex {AreaIndex} for filter {WorldEventObjectFilter}!");
         area = null;
         return false;
+    }
+
+    public bool TryGetExistingFilterInArea(Dictionary<int, List<LG_WorldEventObject>> preAllocWE, LG_Area area, [MaybeNullWhen(false)] out LG_WorldEventObject weObj)
+    {
+        weObj = preAllocWE.GetOrAddNew(area.GetInstanceID()).FirstOrDefault(we => we.WorldEventObjectKey == WorldEventObjectFilter);
+        if (weObj == null) return false;
+        
+        Position = weObj.transform.position;
+        if (Rotation != Vector3.zero) weObj.transform.rotation = Quaternion.Euler(Rotation);
+        if (Scale != Vector3.one) weObj.transform.localScale = Scale;
+
+        return true;
     }
 }
