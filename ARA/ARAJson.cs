@@ -1,11 +1,12 @@
-﻿using AmorLib.Utils;
+﻿using AmorLib.Dependencies;
+using AmorLib.Utils;
 using System.Text.Json;
 
 namespace ARA;
 
 internal static class ARAJson
 {
-    private static readonly JsonSerializerOptions _setting = JsonSerializerUtil.CreateDefaultSettings(true, true, false);
+    private static readonly JsonSerializerOptions _setting = JsonSerializerUtil.CreateDefaultSettings(true, PData_Wrapper.IsLoaded, InjectLib_Wrapper.IsLoaded);
 
     public static T Deserialize<T>(string json)
     {
