@@ -44,15 +44,12 @@ public sealed class LayoutConfigManager : CustomConfigBase
     {
         Directory.CreateDirectory(ModulePath);
 
-        //if (Configuration.CreateTemplate)
-        //{
-            string templatePath = Path.Combine(ModulePath, "Template.json");
-            var templateData = new LayoutConfigDefinition()
-            {
-                Zones = new ZoneCustomData[] { new() }
-            };
-            File.WriteAllText(templatePath, ARAJson.Serialize(templateData, typeof(LayoutConfigDefinition)));
-        //}
+        string templatePath = Path.Combine(ModulePath, "Template.json");
+        var templateData = new LayoutConfigDefinition()
+        {
+            Zones = new ZoneCustomData[] { new() }
+        };
+        File.WriteAllText(templatePath, ARAJson.Serialize(templateData, typeof(LayoutConfigDefinition)));
 
         foreach (string customFile in Directory.EnumerateFiles(ModulePath, "*.json", SearchOption.AllDirectories))
         {
@@ -120,11 +117,10 @@ public sealed class LayoutConfigManager : CustomConfigBase
         Dictionary<int, List<LG_WorldEventObject>> preAllocWE = new(); // map existing WE objects
         foreach (var weObj in UnityEngine.Object.FindObjectsOfType<LG_WorldEventObject>())
         {
-            var area = weObj.ParentArea
-                ?? CourseNodeUtil.GetCourseNode(weObj.transform.position, Dimension.GetDimensionFromPos(weObj.transform.position)?.DimensionIndex ?? eDimensionIndex.Reality)?.m_area;
+            var area = weObj.ParentArea ?? CourseNodeUtil.GetCourseNode(weObj.transform.position)?.m_area;
             if (area == null) continue;
             preAllocWE.GetOrAddNew(area.GetInstanceID()).Add(weObj);
-        }        
+        }
 
         ARALogger.Debug("Applying layout data");
         foreach (var zone in Builder.CurrentFloor.allZones)
@@ -135,11 +131,13 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     public override void OnEnterLevel() // fix cargo with dimension level layouts
     {
-        var cage = UnityEngine.Object.FindObjectOfType<ElevatorCargoCage>();
-        if (cage == null) return;
-        foreach (var cargo in cage.GetComponentsInChildren<ItemCuller>())
+        foreach (var cage in UnityEngine.Object.FindObjectsOfType<ElevatorCargoCage>())
         {
-            cargo.MoveToNode(Builder.GetElevatorArea().m_courseNode.m_cullNode, cage.transform.position);
+            if (cage == null) return;
+            foreach (var cargo in cage.GetComponentsInChildren<ItemCuller>())
+            {
+                cargo.MoveToNode(Builder.GetElevatorArea().m_courseNode.m_cullNode, cage.transform.position);
+            }
         }
     }
 
@@ -148,7 +146,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         /* Setup All WE Terminals */
         if (Current.AllWorldEventTerminals)
         {
-            AddWorldEventToTerminals(zone);
+            AddWorldEventObjectToTerminals(zone);
         }
 
         if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) return;
@@ -199,7 +197,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         }
     }
 
-    private static void AddWorldEventToTerminals(LG_Zone zone)
+    private static void AddWorldEventObjectToTerminals(LG_Zone zone)
     {
         for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
         {

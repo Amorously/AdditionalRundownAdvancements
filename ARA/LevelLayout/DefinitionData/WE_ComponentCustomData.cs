@@ -34,10 +34,10 @@ public sealed class WE_ComponentCustomData
     public ColliderType ColliderType { get; set; } = ColliderType.Box;
     public Vector3 Center { get; set; } = Vector3.zero;
     public Vector3 Size { get; set; } = Vector3.one;
-    public float Radius { get; set; } = 0.0f;
-    public float Height { get; set; } = 0.0f;
+    public float Radius { get; set; } = 0f;
+    public float Height { get; set; } = 0f;
     public Axis Direction { get; set; } = Axis.None;
-    public float LookatMaxDistance { get; set; } = 0.0f;
+    public float LookatMaxDistance { get; set; } = 0f;
     public LocaleText InteractionText { get; set; } = LocaleText.Empty;
     public eCarryItemInsertTargetType CarryItemInsertType { get; set; } = eCarryItemInsertTargetType.None;
     public bool RemoveItemOnInsert { get; set; } = false;

@@ -10,7 +10,6 @@ public sealed class ZoneCustomData : GlobalBase
     public Vector3[] EnemySpawnPoints { get; set; } = Array.Empty<Vector3>();
     public Vector3[] BioscanSpawnPoints { get; set; } = Array.Empty<Vector3>();
     public bool ForceGeneratorClusterMarkers { get; set; } = false;
-    //public TerminalCustomData[] Terminals { get; set; } = Array.Empty<TerminalCustomData>();
     public WE_ObjectCustomData[] WorldEventObjects { get; set; } = Array.Empty<WE_ObjectCustomData>();
 
     public void AddSpawnPoints()
