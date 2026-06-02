@@ -143,7 +143,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     private static void ApplyLayoutData(LG_Zone zone, Dictionary<int, List<LG_WorldEventObject>> preAllocWE)
     {
-        /* Setup All WE Terminals */
+        /* Setup all WE Terminals */
         if (Current.AllWorldEventTerminals)
         {
             AddWorldEventObjectToTerminals(zone);
@@ -170,6 +170,33 @@ public sealed class LayoutConfigManager : CustomConfigBase
             /* Setup Custom WE Components */
             foreach ((var type, var weComp) in weData.Components)
             {
+                /* Add collider, if trigger component */
+                if (type >= WorldEventComponent.WE_CollisionTrigger && type <= WorldEventComponent.WE_InteractTrigger)
+                {
+                    if (weComp.ColliderType == ColliderType.Box)
+                    {
+                        var collider = weObj.gameObject.AddComponent<BoxCollider>();
+                        collider.isTrigger = weComp.IsTrigger;
+                        collider.center = weComp.Center;
+                        collider.size = weComp.Size;
+                    }
+                    else if (weComp.ColliderType == ColliderType.Sphere)
+                    {
+                        var collider = weObj.gameObject.AddComponent<SphereCollider>();
+                        collider.isTrigger = weComp.IsTrigger;
+                        collider.center = weComp.Center;
+                        collider.radius = weComp.Radius;
+                    }
+                    else if (weComp.ColliderType == ColliderType.Capsule)
+                    {
+                        var collider = weObj.gameObject.AddComponent<CapsuleCollider>();
+                        collider.isTrigger = weComp.IsTrigger;
+                        collider.center = weComp.Center;
+                        collider.radius = weComp.Radius;
+                        collider.height = weComp.Height;
+                    }
+                }
+
                 switch (type)
                 {
                     case WorldEventComponent.WE_SpecificTerminal when weComp.PrefabOverride != TerminalPrefab.None:
@@ -189,8 +216,30 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         break;
 
                     case WorldEventComponent.WE_CollisionTrigger:
+                        var collisionTrigger = weObj.gameObject.AddOrGetComponent<LG_CollisionWorldEventTrigger>();
+                        collisionTrigger.m_isToggle = weComp.IsToggle;
+                        break;
+
                     case WorldEventComponent.WE_LookatTrigger:
+                        var lookAtTrigger = weObj.gameObject.AddOrGetComponent<LG_LookatWorldEventTrigger>();
+                        lookAtTrigger.m_lookatMaxDistance = weComp.LookatMaxDistance;
+                        lookAtTrigger.m_isToggle = weComp.IsToggle;
+                        break;
+
                     case WorldEventComponent.WE_InteractTrigger:
+                        var interactTrigger = weObj.gameObject.AddOrGetComponent<LG_InteractWorldEventTrigger>();
+                        interactTrigger.m_colliderToOwn ??= weObj.gameObject.GetComponent<Collider>();
+                        interactTrigger.m_interactionText = weComp.InteractionText;
+                        interactTrigger.m_isToggle = weComp.IsToggle;
+                        interactTrigger.m_insertType = weComp.CarryItemInsertType;
+                        interactTrigger.m_carryAlign = new() 
+                        {
+                            position = weComp.CarryItemTransform.Position, 
+                            rotation = Quaternion.Euler(weComp.CarryItemTransform.Rotation), 
+                            localScale = weComp.CarryItemTransform.Scale 
+                        };
+                        interactTrigger.m_removeItemOnInsert = weComp.RemoveItemOnInsert;
+                        interactTrigger.m_itemStateAfterInsert = weComp.ItemStateAfterInsert;
                         break;
                 }
             }

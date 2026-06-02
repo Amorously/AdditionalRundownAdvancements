@@ -1,7 +1,5 @@
-﻿using AmorLib.Utils.JsonElementConverters;
-using GameData;
+﻿using GameData;
 using UnityEngine;
-using UnityEngine.Animations;
 
 namespace ARA.LevelLayout.DefinitionData;
 
@@ -19,9 +17,17 @@ public enum WorldEventComponent
 
 public enum ColliderType
 {
+    None,
     Box,
     Sphere,
     Capsule
+}
+
+public struct CarryItemTransform
+{
+    public Vector3 Position;
+    public Vector3 Rotation;
+    public Vector3 Scale;
 }
 
 public sealed class WE_ComponentCustomData
@@ -30,15 +36,17 @@ public sealed class WE_ComponentCustomData
     public List<WardenObjectiveEventData> EventsOnPickup { get; set; } = new();
     public PlaceNavMarkerOnGO.eMarkerType NavMarkerType { get; set; } = PlaceNavMarkerOnGO.eMarkerType.Waypoint;
     public bool PlaceOnStart { get; set; } = true;
-    public bool IsToggle { get; set; } = false;
+    public bool IsTrigger { get; set; } = false;
     public ColliderType ColliderType { get; set; } = ColliderType.Box;
     public Vector3 Center { get; set; } = Vector3.zero;
     public Vector3 Size { get; set; } = Vector3.one;
     public float Radius { get; set; } = 0f;
     public float Height { get; set; } = 0f;
-    public Axis Direction { get; set; } = Axis.None;
+    public bool IsToggle { get; set; } = false;
     public float LookatMaxDistance { get; set; } = 0f;
-    public LocaleText InteractionText { get; set; } = LocaleText.Empty;
+    public uint InteractionText { get; set; } = 0u;    
     public eCarryItemInsertTargetType CarryItemInsertType { get; set; } = eCarryItemInsertTargetType.None;
+    public CarryItemTransform CarryItemTransform { get; set; } = new();
     public bool RemoveItemOnInsert { get; set; } = false;
+    public eCarryItemCustomState ItemStateAfterInsert { get; set; } = eCarryItemCustomState.Default;
 }

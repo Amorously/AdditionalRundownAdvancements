@@ -6,7 +6,7 @@ using HarmonyLib;
 
 namespace ARA;
 
-[BepInPlugin("Amor.ARA", MODNAME, "0.2.4")]
+[BepInPlugin("Amor.ARA", MODNAME, "0.3.0")]
 [BepInDependency("dev.gtfomodding.gtfo-api", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("com.dak.MTFO", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("Amor.AmorLib", BepInDependency.DependencyFlags.HardDependency)]

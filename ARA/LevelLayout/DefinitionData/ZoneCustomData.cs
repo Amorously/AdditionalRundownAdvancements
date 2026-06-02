@@ -24,7 +24,7 @@ public sealed class ZoneCustomData : GlobalBase
         for (int i = 0;  i < positions.Length; i++) 
         {       
             Vector3 pos = positions[i];
-            var area = CourseNodeUtil.GetCourseNode(pos, DimensionIndex).m_area;
+            var area = CourseNodeUtil.GetCourseNode(pos, DimensionIndex)?.m_area;
             if (area == null) continue;
             string name = "ARA_" + source + "_SpawnPoint";
             if (i > 0) name += $" ({i})";
