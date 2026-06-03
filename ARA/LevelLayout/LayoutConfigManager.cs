@@ -15,10 +15,25 @@ public sealed class LayoutConfigManager : CustomConfigBase
     private static readonly Dictionary<string, HashSet<uint>> _filepathLayoutMap = new();
     private static readonly Dictionary<uint, LayoutConfigDefinition> _customLayoutData = new();
     private static readonly Dictionary<Vector3, SpecificDataContainer> _positionToContainerMap = new();
+    private static readonly Dictionary<string, IntPtr> _currentARAFilters = new();
 
     public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
-    {
-        zoneData = Current.Zones.FirstOrDefault(z => z != null && z.IntTuple == zone.ToIntTuple(), null);
+    { 
+        var matchingData = Current.Zones.Where(zData => zData != null && zData.IntTuple == zone.ToIntTuple()).ToList();
+        zoneData = matchingData.Count switch
+        {
+            0 => null,
+            1 => matchingData[0],
+            _ => new ZoneCustomData
+            {
+                HibernateSpawnAligns = matchingData.SelectMany(zData => zData.HibernateSpawnAligns).ToArray(),
+                EnemySpawnPoints = matchingData.SelectMany(zData => zData.EnemySpawnPoints).ToArray(),
+                BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
+                ForceGeneratorClusterMarkers = matchingData.Any(zData => zData.ForceGeneratorClusterMarkers),
+                WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray()
+                
+            }
+        };
         return zoneData != null;
     }
 
@@ -45,7 +60,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         Directory.CreateDirectory(ModulePath);
 
         string templatePath = Path.Combine(ModulePath, "Template.json");
-        var templateData = new LayoutConfigDefinition()
+        var templateData = new LayoutConfigDefinition() 
         {
             Zones = new ZoneCustomData[] { new() }
         };
@@ -58,12 +73,12 @@ public sealed class LayoutConfigManager : CustomConfigBase
         }
 
         var listener = LiveEdit.CreateListener(ModulePath, "*.json", true);
-        listener.FileCreated += FileCreatedOrChanged;
-        listener.FileChanged += FileCreatedOrChanged;
+        listener.FileCreated += FileCreated;
+        listener.FileChanged += FileChanged;
         listener.FileDeleted += FileDeleted;
     }
 
-    private static void ReadFileContent(string file, string content)
+    private static uint ReadFileContent(string file, string content)
     {
         var layoutSet = _filepathLayoutMap.GetOrAddNew(file);
 
@@ -79,14 +94,66 @@ public sealed class LayoutConfigManager : CustomConfigBase
             layoutSet.Add(data.MainLevelLayout);
             _customLayoutData[data.MainLevelLayout] = data;
         }
+
+        return data?.MainLevelLayout ?? 0u;
     }
 
-    private void FileCreatedOrChanged(LiveEditEventArgs e)
+    private void FileCreated(LiveEditEventArgs e)
+    {
+        ARALogger.Warn($"LiveEdit file created: {e.FullPath}");
+        LiveEdit.TryReadFileContent(e.FullPath, (content) =>
+        {
+            ReadFileContent(e.FullPath, content);
+        });
+    }
+
+    private void FileChanged(LiveEditEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file changed: {e.FullPath}");
         LiveEdit.TryReadFileContent(e.FullPath, (content) =>
         {
-            ReadFileContent(e.FullPath, content);
+            uint changedLayoutID = ReadFileContent(e.FullPath, content);
+            if (Current == LayoutConfigDefinition.Empty || Current.MainLevelLayout != changedLayoutID || GameStateManager.CurrentStateName != eGameStateName.InLevel)
+                return;
+
+            foreach (var weData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.WorldEventObjects))
+            {
+                if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || weData.UseExistingFilterInArea || weData.UseRandomPosition)
+                    continue;
+
+                LG_WorldEventObject weObj = new(ptr);
+                weObj.transform.position = weData.Position;
+                weObj.transform.rotation = Quaternion.Euler(weData.Rotation);
+                weObj.transform.localScale = weData.Scale;
+
+                if (!weObj.gameObject.TryAndGetComponent<Collider>(out var collider))
+                    continue;
+
+                foreach (var weComp in weData.Components.Values)
+                {
+                    switch (weComp.ColliderType)
+                    {
+                        case ColliderType.Box:
+                            var box = collider.Cast<BoxCollider>();
+                            box.center = weComp.Center;
+                            box.size = weComp.Size;
+                            break;
+
+                        case ColliderType.Sphere:
+                            var sphere = collider.Cast<SphereCollider>();
+                            sphere.center = weComp.Center;
+                            sphere.radius = weComp.Radius;
+                            break;
+
+                        case ColliderType.Capsule:
+                            var capsule = collider.Cast<CapsuleCollider>();
+                            capsule.center = weComp.Center;
+                            capsule.radius = weComp.Radius;
+                            capsule.height = weComp.Height;
+                            break;
+                    }
+                }
+            }
         });
     }
     
@@ -108,6 +175,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         var layout = RundownManager.ActiveExpedition.LevelLayoutData;
         Current = _customLayoutData.TryGetValue(layout, out var config) ? config : LayoutConfigDefinition.Empty;
         _positionToContainerMap.Clear();
+        _currentARAFilters.Clear();
     }
 
     public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
@@ -164,18 +232,23 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
                 weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
                 weObj.transform.localScale = weData.Scale;
-                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();                
+                if (!_currentARAFilters.TryAdd(weData.WorldEventObjectFilter, weObj.Pointer))
+                {
+                    ARALogger.Debug($"Duplicates of WorldEventObjectFilter \"{weData.WorldEventObjectFilter}\" will be illegible for LiveEdit mid-level");
+                }
             }
 
             /* Setup Custom WE Components */
             foreach ((var type, var weComp) in weData.Components)
             {
-                /* Add collider, if trigger component */
+                /* Add Collider if has Trigger Component */
                 if (type >= WorldEventComponent.WE_CollisionTrigger && type <= WorldEventComponent.WE_InteractTrigger)
                 {
                     if (weComp.ColliderType == ColliderType.Box)
                     {
                         var collider = weObj.gameObject.AddComponent<BoxCollider>();
+                        collider.gameObject.layer = 14;
                         collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.size = weComp.Size;
@@ -183,6 +256,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     else if (weComp.ColliderType == ColliderType.Sphere)
                     {
                         var collider = weObj.gameObject.AddComponent<SphereCollider>();
+                        collider.gameObject.layer = 14;
                         collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.radius = weComp.Radius;
@@ -190,6 +264,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     else if (weComp.ColliderType == ColliderType.Capsule)
                     {
                         var collider = weObj.gameObject.AddComponent<CapsuleCollider>();
+                        collider.gameObject.layer = 14;
                         collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.radius = weComp.Radius;
@@ -232,7 +307,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         interactTrigger.m_interactionText = weComp.InteractionText;
                         interactTrigger.m_isToggle = weComp.IsToggle;
                         interactTrigger.m_insertType = weComp.CarryItemInsertType;
-                        interactTrigger.m_carryAlign = new() 
+                        interactTrigger.m_carryAlign ??= new() 
                         {
                             position = weComp.CarryItemTransform.Position, 
                             rotation = Quaternion.Euler(weComp.CarryItemTransform.Rotation), 

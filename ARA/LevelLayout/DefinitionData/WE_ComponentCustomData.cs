@@ -36,8 +36,8 @@ public sealed class WE_ComponentCustomData
     public List<WardenObjectiveEventData> EventsOnPickup { get; set; } = new();
     public PlaceNavMarkerOnGO.eMarkerType NavMarkerType { get; set; } = PlaceNavMarkerOnGO.eMarkerType.Waypoint;
     public bool PlaceOnStart { get; set; } = true;
+    public ColliderType ColliderType { get; set; } = ColliderType.None;
     public bool IsTrigger { get; set; } = false;
-    public ColliderType ColliderType { get; set; } = ColliderType.Box;
     public Vector3 Center { get; set; } = Vector3.zero;
     public Vector3 Size { get; set; } = Vector3.one;
     public float Radius { get; set; } = 0f;

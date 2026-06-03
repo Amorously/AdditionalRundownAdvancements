@@ -1,4 +1,5 @@
-﻿using AmorLib.Utils.Extensions;
+﻿using AmorLib.Utils;
+using AmorLib.Utils.Extensions;
 using LevelGeneration;
 using System.Diagnostics.CodeAnalysis;
 using UnityEngine;
@@ -14,14 +15,19 @@ public sealed class WE_ObjectCustomData
     public Vector3 Position { get; set; } = Vector3.zero;
     public Vector3 Rotation { get; set;} = Vector3.zero;
     public Vector3 Scale { get; set; } = Vector3.one;
-    public Dictionary<WorldEventComponent, WE_ComponentCustomData> Components { get; set; } = new();
+    public Dictionary<WorldEventComponent, WE_ComponentCustomData> Components { get; set; } = new();    
 
     public bool IsAreaIndexValid(LG_Zone zone, [MaybeNullWhen(false)] out LG_Area area)
-    {
+    {        
         if (AreaIndex >= 0 && AreaIndex < zone.m_areas.Count)
         {
             area = zone.m_areas[AreaIndex];
             return true; 
+        }
+        else if (AreaIndex == -1)
+        {
+            area = CourseNodeUtil.GetCourseNode(Position, zone.DimensionIndex)?.m_area; // i hope this doesn't fail
+            return area != null;
         }
 
         ARALogger.Error($"Invalid AreaIndex {AreaIndex} for filter {WorldEventObjectFilter}!");
