@@ -250,7 +250,6 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     {
                         var collider = weObj.gameObject.AddComponent<BoxCollider>();
                         collider.gameObject.layer = 14;
-                        collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.size = weComp.Size;
                     }
@@ -258,7 +257,6 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     {
                         var collider = weObj.gameObject.AddComponent<SphereCollider>();
                         collider.gameObject.layer = 14;
-                        collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.radius = weComp.Radius;
                     }
@@ -266,7 +264,6 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     {
                         var collider = weObj.gameObject.AddComponent<CapsuleCollider>();
                         collider.gameObject.layer = 14;
-                        collider.isTrigger = weComp.IsTrigger;
                         collider.center = weComp.Center;
                         collider.radius = weComp.Radius;
                         collider.height = weComp.Height;
