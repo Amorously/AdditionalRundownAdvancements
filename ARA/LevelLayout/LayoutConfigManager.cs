@@ -325,18 +325,24 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         weAnimObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
                         var weAnim = weAnimObj.gameObject.AddComponent<LG_WorldEventAnimationTrigger>();
                         weAnim.m_playResetOnSetup = weComp.PlayResetOnStartup;
-                        LG_WorldEventAnimationTrigger.GameObjectActivationPair onTrigger = new()
+                        LG_WorldEventAnimationTrigger.GameObjectActivationPair[] onTrigger = new[]
                         {
-                            GameObjectToSet = weObj.gameObject, 
-                            ActivationMode = weComp.ActivationMode
+                            new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+                            {
+                                GameObjectToSet = weObj.gameObject,
+                                ActivationMode = weComp.ActivationMode
+                            }
                         };
-                        LG_WorldEventAnimationTrigger.GameObjectActivationPair onReset = new()
+                        LG_WorldEventAnimationTrigger.GameObjectActivationPair[] onReset = new[]
                         {
-                            GameObjectToSet = weObj.gameObject,
-                            ActivationMode = !weComp.ActivationMode
+                            new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+                            {
+                                GameObjectToSet = weObj.gameObject,
+                                ActivationMode = !weComp.ActivationMode
+                            }
                         };
-                        weAnim.m_gameObjectsToActivateOnTrigger = new(1) { onTrigger };
-                        weAnim.m_gameObjectsToActivateOnReset = new(1) { onReset };
+                        weAnim.m_gameObjectsToActivateOnTrigger = onTrigger;
+                        weAnim.m_gameObjectsToActivateOnReset = onReset;
                         break;
                 }
             }
