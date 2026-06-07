@@ -1,6 +1,7 @@
 ﻿using AmorLib.Utils;
 using AmorLib.Utils.Extensions;
 using ARA.LevelLayout.DefinitionData;
+using BepInEx;
 using FluffyUnderware.DevTools.Extensions;
 using GTFO.API.Utilities;
 using LevelGeneration;
@@ -315,6 +316,27 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         };
                         interactTrigger.m_removeItemOnInsert = weComp.RemoveItemOnInsert;
                         interactTrigger.m_itemStateAfterInsert = weComp.ItemStateAfterInsert;
+                        break;
+
+                    case WorldEventComponent.WE_AnimationTrigger:
+                        if (weComp.WorldEventAnimationFilter.IsNullOrWhiteSpace()) continue;
+                        var weAnimObj = area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
+                        weAnimObj.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
+                        weAnimObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                        var weAnim = weAnimObj.gameObject.AddComponent<LG_WorldEventAnimationTrigger>();
+                        weAnim.m_playResetOnSetup = weComp.PlayResetOnStartup;
+                        LG_WorldEventAnimationTrigger.GameObjectActivationPair onTrigger = new()
+                        {
+                            GameObjectToSet = weObj.gameObject, 
+                            ActivationMode = weComp.ActivationMode
+                        };
+                        LG_WorldEventAnimationTrigger.GameObjectActivationPair onReset = new()
+                        {
+                            GameObjectToSet = weObj.gameObject,
+                            ActivationMode = !weComp.ActivationMode
+                        };
+                        weAnim.m_gameObjectsToActivateOnTrigger = new(1) { onTrigger };
+                        weAnim.m_gameObjectsToActivateOnReset = new(1) { onReset };
                         break;
                 }
             }

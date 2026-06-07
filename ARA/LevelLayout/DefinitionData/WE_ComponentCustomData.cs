@@ -12,7 +12,8 @@ public enum WorldEventComponent
     WE_LookatTrigger,
     WE_InteractTrigger,
     WE_SpecificTerminal,
-    WE_SpecificPickup
+    WE_SpecificPickup,
+    WE_AnimationTrigger
 }
 
 public enum ColliderType
@@ -49,4 +50,7 @@ public sealed class WE_ComponentCustomData
     public CarryItemTransform CarryItemTransform { get; set; } = new();
     public bool RemoveItemOnInsert { get; set; } = false;
     public eCarryItemCustomState ItemStateAfterInsert { get; set; } = eCarryItemCustomState.Default;
+    public string WorldEventAnimationFilter { get; set; } = string.Empty;
+    public bool PlayResetOnStartup { get; set; } = false;
+    public bool ActivationMode { get; set; } = true;
 }
