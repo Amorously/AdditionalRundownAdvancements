@@ -19,7 +19,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
     private static readonly Dictionary<string, IntPtr> _currentARAFilters = new();
 
     public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
-    { 
+    {
         var matchingData = Current.Zones.Where(zData => zData != null && zData.IntTuple == zone.ToIntTuple()).ToList();
         zoneData = matchingData.Count switch
         {
@@ -32,7 +32,6 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
                 ForceGeneratorClusterMarkers = matchingData.Any(zData => zData.ForceGeneratorClusterMarkers),
                 WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray()
-                
             }
         };
         return zoneData != null;
@@ -56,12 +55,11 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     public override string ModulePath => Module + "/LevelLayout";
 
-    public override void Setup() 
+    public override void Setup()
     {
         Directory.CreateDirectory(ModulePath);
-
         string templatePath = Path.Combine(ModulePath, "Template.json");
-        var templateData = new LayoutConfigDefinition() 
+        var templateData = new LayoutConfigDefinition()
         {
             Zones = new ZoneCustomData[] { new() }
         };
@@ -69,8 +67,15 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
         foreach (string customFile in Directory.EnumerateFiles(ModulePath, "*.json", SearchOption.AllDirectories))
         {
-            string content = File.ReadAllText(customFile);
-            ReadFileContent(customFile, content);
+            try
+            {
+                string content = File.ReadAllText(customFile);
+                ReadFileContent(customFile, content);
+            }
+            catch (Exception ex)
+            {
+                ARALogger.Error($"Error reading file {customFile}:\n{ex.Message}");
+            }
         }
 
         var listener = LiveEdit.CreateListener(ModulePath, "*.json", true);
@@ -79,7 +84,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         listener.FileDeleted += FileDeleted;
     }
 
-    private static uint ReadFileContent(string file, string content)
+    private static uint ReadFileContent(string file, string content) // returns MainLayoutID
     {
         var layoutSet = _filepathLayoutMap.GetOrAddNew(file);
 
@@ -115,7 +120,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         {
             uint changedLayoutID = ReadFileContent(e.FullPath, content);
             if (Current == LayoutConfigDefinition.Empty || Current.MainLevelLayout != changedLayoutID || GameStateManager.CurrentStateName != eGameStateName.InLevel)
-                return;
+                return; // early exit if not in current level
 
             foreach (var weData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.WorldEventObjects))
             {
@@ -157,7 +162,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
             }
         });
     }
-    
+
     private void FileDeleted(LiveEditEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file deleted: {e.FullPath}");
@@ -182,42 +187,31 @@ public sealed class LayoutConfigManager : CustomConfigBase
     public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
     {
         if (batch != LG_Factory.BatchName.CustomObjectCollection) return;
-        
-        Dictionary<int, List<LG_WorldEventObject>> preAllocWE = new(); // map existing WE objects
-        foreach (var weObj in UnityEngine.Object.FindObjectsOfType<LG_WorldEventObject>())
-        {
-            var area = weObj.ParentArea ?? CourseNodeUtil.GetCourseNode(weObj.transform.position)?.m_area;
-            if (area == null) continue;
-            preAllocWE.GetOrAddNew(area.GetInstanceID()).Add(weObj);
-        }
-
         ARALogger.Debug("Applying layout data");
+        WE_ObjectCustomData.AllocatePreexistingWorldEventObjects();
         foreach (var zone in Builder.CurrentFloor.allZones)
         {
-            ApplyLayoutData(zone, preAllocWE);
+            AddWorldEventObjectToTerminals(zone);
+            ApplyLayoutZoneData(zone);
         }
+        SetupAnimationTriggers();
     }
 
     public override void OnEnterLevel() // fix cargo with dimension level layouts
     {
+        var elevatorArea = Builder.GetElevatorArea();
         foreach (var cage in UnityEngine.Object.FindObjectsOfType<ElevatorCargoCage>())
         {
             if (cage == null) return;
             foreach (var cargo in cage.GetComponentsInChildren<ItemCuller>())
             {
-                cargo.MoveToNode(Builder.GetElevatorArea().m_courseNode.m_cullNode, cage.transform.position);
+                cargo.MoveToNode(elevatorArea.m_courseNode.m_cullNode, cage.transform.position);
             }
         }
     }
 
-    private static void ApplyLayoutData(LG_Zone zone, Dictionary<int, List<LG_WorldEventObject>> preAllocWE)
+    private static void ApplyLayoutZoneData(LG_Zone zone)
     {
-        /* Setup all WE Terminals */
-        if (Current.AllWorldEventTerminals)
-        {
-            AddWorldEventObjectToTerminals(zone);
-        }
-
         if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) return;
 
         /* Add Spawnpoints to Zone Areas */
@@ -226,19 +220,17 @@ public sealed class LayoutConfigManager : CustomConfigBase
         /* Add Custom WE Objects */
         foreach (var weData in zoneData.WorldEventObjects)
         {
-            if (!weData.IsAreaIndexValid(zone, out var area)) continue;
-            if (!weData.UseExistingFilterInArea || !weData.TryGetExistingFilterInArea(preAllocWE, area, out var weObj))
+            if (weData.ShouldCreateNewWorldEventObject(zone, out var weObj))
             {
-                weObj = area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
-                if (weData.UseRandomPosition) weData.Position = area.m_courseNode.GetRandomPositionInside();
-                weObj.transform.SetPositionAndRotation(weData.Position, Quaternion.Euler(weData.Rotation));
-                weObj.transform.localScale = weData.Scale;
-                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();                
+                weObj = weData.Area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
+                weObj.transform.SetPositionRotationScale(weData.Position, weData.Rotation, weData.Scale);
+                weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
                 if (!_currentARAFilters.TryAdd(weData.WorldEventObjectFilter, weObj.Pointer))
                 {
                     ARALogger.Debug($"Duplicates of WorldEventObjectFilter \"{weData.WorldEventObjectFilter}\" will be illegible for LiveEdit mid-level");
                 }
             }
+            if (weObj == null) continue;
 
             /* Setup Custom WE Components */
             foreach ((var type, var weComp) in weData.Components)
@@ -246,35 +238,38 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 /* Add Collider if has Trigger Component */
                 if (type >= WorldEventComponent.WE_CollisionTrigger && type <= WorldEventComponent.WE_InteractTrigger)
                 {
-                    if (weComp.ColliderType == ColliderType.Box)
+                    switch (weComp.ColliderType)
                     {
-                        var collider = weObj.gameObject.AddComponent<BoxCollider>();
-                        collider.gameObject.layer = 14;
-                        collider.center = weComp.Center;
-                        collider.size = weComp.Size;
-                    }
-                    else if (weComp.ColliderType == ColliderType.Sphere)
-                    {
-                        var collider = weObj.gameObject.AddComponent<SphereCollider>();
-                        collider.gameObject.layer = 14;
-                        collider.center = weComp.Center;
-                        collider.radius = weComp.Radius;
-                    }
-                    else if (weComp.ColliderType == ColliderType.Capsule)
-                    {
-                        var collider = weObj.gameObject.AddComponent<CapsuleCollider>();
-                        collider.gameObject.layer = 14;
-                        collider.center = weComp.Center;
-                        collider.radius = weComp.Radius;
-                        collider.height = weComp.Height;
+                        case ColliderType.Box:
+                            var box = weObj.gameObject.AddComponent<BoxCollider>();
+                            box.gameObject.layer = 14;
+                            box.center = weComp.Center;
+                            box.size = weComp.Size;
+                            break;
+
+                        case ColliderType.Sphere:
+                            var collider = weObj.gameObject.AddComponent<SphereCollider>();
+                            collider.gameObject.layer = 14;
+                            collider.center = weComp.Center;
+                            collider.radius = weComp.Radius;
+                            break;
+
+                        case ColliderType.Capsule:
+                            var capsule = weObj.gameObject.AddComponent<CapsuleCollider>();
+                            capsule.gameObject.layer = 14;
+                            capsule.center = weComp.Center;
+                            capsule.radius = weComp.Radius;
+                            capsule.height = weComp.Height;
+                            break;
                     }
                 }
 
+                /* Setup Component Types */
                 switch (type)
                 {
                     case WorldEventComponent.WE_SpecificTerminal when weComp.PrefabOverride != TerminalPrefab.None:
                     case WorldEventComponent.WE_SpecificPickup:
-                        _positionToContainerMap[weData.Position] = new(weData.WorldEventObjectFilter, area.m_courseNode, weComp.PrefabOverride, weComp.EventsOnPickup);
+                        _positionToContainerMap[weData.Position] = new(weData.WorldEventObjectFilter, weData.Area.m_courseNode, weComp.PrefabOverride, weComp.EventsOnPickup);
                         break;
 
                     case WorldEventComponent.WE_ChainedPuzzle:
@@ -305,41 +300,14 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         interactTrigger.m_interactionText = weComp.InteractionText;
                         interactTrigger.m_isToggle = weComp.IsToggle;
                         interactTrigger.m_insertType = weComp.CarryItemInsertType;
-                        interactTrigger.m_carryAlign ??= new() 
+                        interactTrigger.m_carryAlign ??= new()
                         {
-                            position = weComp.CarryItemTransform.Position, 
-                            rotation = Quaternion.Euler(weComp.CarryItemTransform.Rotation), 
-                            localScale = weComp.CarryItemTransform.Scale 
+                            position = weComp.CarryItemTransform.Position,
+                            rotation = weComp.CarryItemTransform.Rotation.ToQuaternion(),
+                            localScale = weComp.CarryItemTransform.Scale
                         };
                         interactTrigger.m_removeItemOnInsert = weComp.RemoveItemOnInsert;
                         interactTrigger.m_itemStateAfterInsert = weComp.ItemStateAfterInsert;
-                        break;
-
-                    case WorldEventComponent.WE_AnimationTrigger:
-                        if (weComp.WorldEventAnimationFilter.IsNullOrWhiteSpace()) continue;
-                        var weAnimObj = area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
-                        weAnimObj.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
-                        weAnimObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                        var weAnim = weAnimObj.gameObject.AddComponent<LG_WorldEventAnimationTrigger>();
-                        weAnim.m_playResetOnSetup = weComp.PlayResetOnStartup;
-                        LG_WorldEventAnimationTrigger.GameObjectActivationPair[] onTrigger = new[]
-                        {
-                            new LG_WorldEventAnimationTrigger.GameObjectActivationPair
-                            {
-                                GameObjectToSet = weObj.gameObject,
-                                ActivationMode = weComp.ActivationMode
-                            }
-                        };
-                        LG_WorldEventAnimationTrigger.GameObjectActivationPair[] onReset = new[]
-                        {
-                            new LG_WorldEventAnimationTrigger.GameObjectActivationPair
-                            {
-                                GameObjectToSet = weObj.gameObject,
-                                ActivationMode = !weComp.ActivationMode
-                            }
-                        };
-                        weAnim.m_gameObjectsToActivateOnTrigger = onTrigger;
-                        weAnim.m_gameObjectsToActivateOnReset = onReset;
                         break;
                 }
             }
@@ -348,6 +316,8 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     private static void AddWorldEventObjectToTerminals(LG_Zone zone)
     {
+        if (!Current.AllWorldEventTerminals) return;
+
         for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
         {
             var term = zone.TerminalsSpawnedInZone[i];
@@ -366,6 +336,47 @@ public sealed class LayoutConfigManager : CustomConfigBase
             if (weTerm == null) return;
             weTerm.transform.localPosition = Vector3.zero;
             weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+        }
+    }
+
+    private static void SetupAnimationTriggers() 
+    {
+        foreach (var weData in Current.Zones.SelectMany(zData => zData.WorldEventObjects))
+        {
+            if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || !weData.Components.TryGetValue(WorldEventComponent.WE_AnimationTrigger, out var weComp))
+                continue;
+
+            List<GameObject> targets = new();
+            LG_WorldEventObject weObj = new(ptr);
+            var weAnimObj = weObj;
+
+            if (!weComp.WorldEventAnimationFilter.IsNullOrWhiteSpace())
+            {
+                weAnimObj = weData.Area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
+                weAnimObj.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
+                weAnimObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                targets.Add(weObj.gameObject);
+            }
+            foreach (var filter in weComp.ARAObjectsToActivate)
+            {
+                if (!_currentARAFilters.TryGetValue(filter, out var targetPtr)) continue;
+                LG_WorldEventObject targetObj = new(targetPtr);
+                targets.Add(targetObj.gameObject);
+            }
+            if (targets.Count == 0) continue;
+
+            var weAnim = weAnimObj.gameObject.AddOrGetComponent<LG_WorldEventAnimationTrigger>();
+            weAnim.m_playResetOnSetup = weComp.PlayResetOnStartup;
+            weAnim.m_gameObjectsToActivateOnTrigger = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+            {
+                GameObjectToSet = go,
+                ActivationMode = weComp.ActivationMode
+            }).ToArray();
+            weAnim.m_gameObjectsToActivateOnReset = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+            {
+                GameObjectToSet = go,
+                ActivationMode = !weComp.ActivationMode
+            }).ToArray();
         }
     }
 }
