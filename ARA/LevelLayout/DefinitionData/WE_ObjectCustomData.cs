@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ARA.LevelLayout.DefinitionData;
 
-public sealed class WE_ObjectCustomData
+public sealed class WE_ObjectCustomData // todo: maybe immutable members?
 {
     public string WorldEventObjectFilter { get; set; } = string.Empty;
     public int AreaIndex { get; set; } = 0;
@@ -36,33 +36,33 @@ public sealed class WE_ObjectCustomData
 
     internal bool ShouldCreateNewWorldEventObject(LG_Zone zone, [MaybeNull] out LG_WorldEventObject weObj)
     {
-        if (!IsAreaIndexValid(zone))
-        {
-            weObj = null;
-            return false;
-        }
-
         if (UseRandomPosition)
         {
             if (RandomPositions.Length > 0)
             {
                 var selected = RandomPositions[_weRand.Next(RandomPositions.Length)];
+                AreaIndex = -1;
                 Position = selected.Position;
                 Rotation = selected.Rotation;
                 Scale = selected.Scale;
             }
             else if (AreaIndex == -1)
             {
-                var randArea = zone.m_areas[_weRand.Next(zone.m_areas.Count)];
-                Position = randArea.m_courseNode.GetRandomPositionInside();
-                Rotation = new(0f, _weRand.Next(360), 0f);
+                AreaIndex = _weRand.Next(zone.m_areas.Count);
             }
-            else
-            {
-                Position = Area.m_courseNode.GetRandomPositionInside();
-                Rotation = new(0f, _weRand.Next(360), 0f);
-            }
-        }               
+        }
+
+        if (!IsAreaIndexValid(zone))
+        {
+            weObj = null;
+            return false;
+        }
+
+        if (UseRandomPosition && RandomPositions.Length == 0 && AreaIndex != -1)
+        {
+            Position = Area.m_courseNode.GetRandomPositionInside();
+            Rotation = new(0f, _weRand.Next(360), 0f);
+        }
 
         if (UseExistingFilterInArea)
         {

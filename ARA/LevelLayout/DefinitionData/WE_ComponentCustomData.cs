@@ -27,9 +27,9 @@ public enum ColliderType
 
 public struct CustomTransform
 {
-    public Vector3 Position;
-    public Vector3 Rotation;
-    public Vector3 Scale;
+    public Vector3 Position { get; set; }
+    public Vector3 Rotation { get; set; }
+    public Vector3 Scale { get; set; }
 
     [JsonConstructor]
     public CustomTransform(Vector3 position, Vector3 rotation, Vector3 scale)
