@@ -1,5 +1,9 @@
 ﻿using AmorLib.Utils;
+using ARA.Utils;
+using GameData;
+using GTFO.API.Extensions;
 using LevelGeneration;
+using System.Text.Json.Serialization;
 using UnityEngine;
 
 namespace ARA.LevelLayout.DefinitionData;
@@ -10,7 +14,13 @@ public sealed class ZoneCustomData : GlobalBase
     public Vector3[] EnemySpawnPoints { get; set; } = Array.Empty<Vector3>();
     public Vector3[] BioscanSpawnPoints { get; set; } = Array.Empty<Vector3>();
     public bool ForceGeneratorClusterMarkers { get; set; } = false;
+    [JsonPropertyName("SetupWorldEventObjectOnLightsInArea")]
+    public int[] AllWorldEventLights { get; set; } = Array.Empty<int>();
     public WE_ObjectCustomData[] WorldEventObjects { get; set; } = Array.Empty<WE_ObjectCustomData>();
+    public List<WorldEventFromSourceData> StaticEventsOnTrigger { get; set; } = new();
+    public List<StaticDimWECPData> StaticWorldEventChainedPuzzleDatas { get; set; } = new();
+    public List<SpecificPickupSpawnData> StaticSpecificPickupSpawnDatas { get; set; } = new();
+    public List<StaticDimWESTData> StaticSpecificTerminalSpawnDatas { get; set; } = new();
 
     public void AddSpawnPoints()
     {
@@ -33,5 +43,21 @@ public sealed class ZoneCustomData : GlobalBase
             go.transform.SetParent(area.transform, true);
             targetList(area).Add(go.transform);
         }
+    }
+
+    public void InjectStaticDimensionWorldEventData()
+    {
+        if (Dimension?.DimensionData?.IsStaticDimension == false || Zone?.m_settings?.m_zoneData == null) return;
+
+        var zoneData = Zone.m_settings.m_zoneData;
+        zoneData.EventsOnTrigger = StaticEventsOnTrigger.ToIl2Cpp();
+        zoneData.WorldEventChainedPuzzleDatas = StaticWorldEventChainedPuzzleDatas.ToIl2Cpp(s => s.ToWECP());
+        zoneData.SpecificPickupSpawningDatas = StaticSpecificPickupSpawnDatas.ToIl2Cpp();
+        zoneData.SpecificTerminalSpawnDatas = StaticSpecificTerminalSpawnDatas.ToIl2Cpp(s => s.ToWEST());
+    }
+
+    public void SetupInvisibleWalls()
+    {
+        
     }
 }

@@ -31,7 +31,12 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 EnemySpawnPoints = matchingData.SelectMany(zData => zData.EnemySpawnPoints).ToArray(),
                 BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
                 ForceGeneratorClusterMarkers = matchingData.Any(zData => zData.ForceGeneratorClusterMarkers),
-                WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray()
+                AllWorldEventLights = matchingData.SelectMany(zData => zData.AllWorldEventLights).ToArray(),
+                WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray(),
+                StaticEventsOnTrigger = matchingData.SelectMany(zData => zData.StaticEventsOnTrigger).ToList(),
+                StaticWorldEventChainedPuzzleDatas = matchingData.SelectMany(zData => zData.StaticWorldEventChainedPuzzleDatas).ToList(),
+                StaticSpecificPickupSpawnDatas = matchingData.SelectMany(zData => zData.StaticSpecificPickupSpawnDatas).ToList(),
+                StaticSpecificTerminalSpawnDatas = matchingData.SelectMany(zData => zData.StaticSpecificTerminalSpawnDatas).ToList()
             }
         };
         return zoneData != null;
@@ -191,7 +196,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         WE_ObjectCustomData.AllocatePreexistingWorldEventObjects();
         foreach (var zone in Builder.CurrentFloor.allZones)
         {
-            AddWorldEventObjectToTerminals(zone);
+            AddWorldEventObjectsToTerminals(zone);
             ApplyLayoutZoneData(zone);
         }
         SetupAnimationTriggers();
@@ -216,6 +221,8 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
         /* Add Spawnpoints to Zone Areas */
         zoneData.AddSpawnPoints();
+        zoneData.InjectStaticDimensionWorldEventData();
+        AddWorldEventObjectsToLights(zone, zoneData.AllWorldEventLights);
 
         /* Add Custom WE Objects */
         foreach (var weData in zoneData.WorldEventObjects)
@@ -314,28 +321,44 @@ public sealed class LayoutConfigManager : CustomConfigBase
         }
     }
 
-    private static void AddWorldEventObjectToTerminals(LG_Zone zone)
+    private static void AddWorldEventObjectsToTerminals(LG_Zone zone)
     {
         if (!Current.AllWorldEventTerminals) return;
 
+        string prefix = string.Format(Current.AutoWorldEventObjectPrefix, "Term");
         for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
         {
             var term = zone.TerminalsSpawnedInZone[i];
             var parentMarker = term.GetComponentInParent<LG_MarkerProducer>();
             if (parentMarker == null) continue;
-            string name = $"WE_ARA_Term_{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{i}";
+            string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{i}";
             var weTerm = parentMarker.AddChildGameObject<LG_WorldEventObject>(name);
             weTerm.transform.localPosition = Vector3.zero;
             weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
         }
-
         if (zone.gameObject.TryAndGetComponent<LG_WardenObjective_Reactor>(out var reactor))
         {
-            string name = $"WE_ARA_Term_{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_Reactor";
+            string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_Reactor";
             var weTerm = reactor.m_terminalAlign?.AddChildGameObject<LG_WorldEventObject>(name);
             if (weTerm == null) return;
             weTerm.transform.localPosition = Vector3.zero;
             weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+        }
+    }
+
+    private static void AddWorldEventObjectsToLights(LG_Zone zone, int[] areas)
+    {       
+        string prefix = string.Format(Current.AutoWorldEventObjectPrefix, "Light");
+        for (int area = 0, num = 0; area < zone.m_areas.Count; area++, num = 0)
+        {
+            if (!areas.Contains(-1) && !areas.Contains(area)) continue;
+            foreach (var light in zone.m_areas[area].GetComponentsInChildren<LG_Light>(false))
+            {
+                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{area}_{num++}";
+                var weLight = light.AddChildGameObject<LG_WorldEventObject>(name);
+                weLight.transform.localPosition = Vector3.zero;
+                weLight.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+            }
         }
     }
 

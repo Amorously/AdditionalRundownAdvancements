@@ -26,15 +26,15 @@ internal static class ElevatorCargoPatches
             ElevatorRide.Current.m_cargoCageInUse = false;
             return false;
         }
-        
-        return !__state.OverrideCargoItems;        
+
+        return !__state.OverrideCargoItems;
     }
 
     [HarmonyPostfix]
     [HarmonyWrapSafe]
-    private static void Post_SpawnItems(ElevatorCargoCage __instance, ElevatorCargoCustomData? __state)
+    private static void Post_SpawnItems(ElevatorCargoCage __instance, bool __runOriginal, ElevatorCargoCustomData? __state)
     {
-        if (__state == null || __state.CargoItems.Length == 0) return;
+        if (!__runOriginal || __state == null || __state.CargoItems.Length == 0) return;
 
         __instance.m_itemsToMoveToCargo ??= new();
         foreach (var itemID in __state.CargoItems)

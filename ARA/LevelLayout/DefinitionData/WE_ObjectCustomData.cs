@@ -24,7 +24,7 @@ public sealed class WE_ObjectCustomData // todo: maybe immutable members?
 
     internal static void AllocatePreexistingWorldEventObjects()
     {
-         _preAllocWE = // map existing WE objects
+        _preAllocWE = // map existing WE objects
         (
             from weObj in UnityEngine.Object.FindObjectsOfType<LG_WorldEventObject>()
             let area = weObj.ParentArea ?? CourseNodeUtil.GetCourseNode(weObj.transform.position)?.m_area
