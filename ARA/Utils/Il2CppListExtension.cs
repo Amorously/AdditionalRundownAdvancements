@@ -2,9 +2,9 @@
 
 public static class Il2CppListExtension
 {
-    public static Il2CppSystem.Collections.Generic.List<T2> ToIl2Cpp<T1, T2>(this IEnumerable<T1> source, Func<T1, T2> selector)
+    public static Il2CppSystem.Collections.Generic.List<TResult> ToIl2Cpp<TSource, TResult>(this IEnumerable<TSource> source, Func<TSource, TResult> selector)
     {
-        var result = new Il2CppSystem.Collections.Generic.List<T2>();
+        var result = new Il2CppSystem.Collections.Generic.List<TResult>();
         foreach (var item in source)
         {
             result.Add(selector(item));

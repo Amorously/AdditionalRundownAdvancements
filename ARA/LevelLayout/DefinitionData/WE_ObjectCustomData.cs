@@ -40,7 +40,7 @@ public sealed class WE_ObjectCustomData // todo: maybe immutable members?
         {
             if (RandomPositions.Length > 0)
             {
-                var selected = RandomPositions[_weRand.Next(RandomPositions.Length)];
+                var selected = RandomPositions[_weRand.Next(RandomPositions.Length)] ?? new();
                 AreaIndex = -1;
                 Position = selected.Position;
                 Rotation = selected.Rotation;
@@ -75,7 +75,7 @@ public sealed class WE_ObjectCustomData // todo: maybe immutable members?
             }
             else
             {
-                ARALogger.Error($"Unable to find preexisting \"{WorldEventObjectFilter}\" in area");
+                ARALogger.Error($"Unable to find preexisting world event object with filter \"{WorldEventObjectFilter}\" in area!");
             }
             return false;
         }
@@ -97,7 +97,7 @@ public sealed class WE_ObjectCustomData // todo: maybe immutable members?
             {
                 Area = CourseNodeUtil.GetCourseNode(Position, zone.DimensionIndex).m_area;
                 if (!zone.m_areas.Contains(Area))
-                    ARALogger.Warn($"\"{WorldEventObjectFilter}\": Area inferred from {Position} is not in {zone.ToIntTuple()}");
+                    ARALogger.Warn($"\"{WorldEventObjectFilter}\": Area inferred from {Position} may not be in {zone.ToIntTuple()}");
                 return true;
             }
             catch

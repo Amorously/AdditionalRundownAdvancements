@@ -7,7 +7,7 @@ using LevelGeneration;
 
 namespace ARA.LevelLayout.DefinitionData;
 
-public sealed class StaticDimWECPData
+public sealed class StaticDimensionWECPData // world event chanined puzzle
 {
     public uint ChainedPuzzle { get; set; } = 0u;
     public string WorldEventObjectFilter { get; set; } = string.Empty;
@@ -24,7 +24,7 @@ public sealed class StaticDimWECPData
     }
 }
 
-public sealed class StaticDimWESTData
+public sealed class StaticDimensionWESTData // world event specfic terminal (cool acronym)
 {
     public string WorldEventObjectFilter { get; set; } = string.Empty;
     public bool IsWardenObjective { get; set; } = false;
@@ -47,6 +47,7 @@ public sealed class StaticDimWESTData
     }
 }
 
+#region MANAGED_TERMINAL_DATA
 public sealed class LocaleCommandData
 {
     public string Command { get; set; } = string.Empty;
@@ -66,25 +67,24 @@ public sealed class LocaleCommandData
             SpecialCommandRule = SpecialCommandRule
         };
     }
-    
-    public struct LocaleTerminalOutput
-    {
-        public TerminalLineType LineType { get; set; }
-        public LocaleText Output { get; set; }
-        public float Time { get; set; }
-
-        public readonly TerminalOutput ToTerminalOutput()
-        {
-            return new()
-            {
-                LineType = LineType,
-                Output = Output.ParseToLocalizedText(),
-                Time = Time,
-            };
-        }
-    }
 }
 
+public sealed class LocaleTerminalOutput
+{
+    public TerminalLineType LineType { get; set; }
+    public LocaleText Output { get; set; }
+    public float Time { get; set; }
+
+    public TerminalOutput ToTerminalOutput()
+    {
+        return new()
+        {
+            LineType = LineType,
+            Output = Output.ParseToLocalizedText(),
+            Time = Time,
+        };
+    }
+}
 
 public sealed class LocaleStartingStateData
 {
@@ -147,3 +147,4 @@ public sealed class PasswordSelectionData : GlobalBase
         };
     }
 }
+#endregion

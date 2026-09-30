@@ -30,6 +30,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 HibernateSpawnAligns = matchingData.SelectMany(zData => zData.HibernateSpawnAligns).ToArray(),
                 EnemySpawnPoints = matchingData.SelectMany(zData => zData.EnemySpawnPoints).ToArray(),
                 BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
+                InvisibleWalls = matchingData.SelectMany(zData => zData.InvisibleWalls).ToArray(),
                 ForceGeneratorClusterMarkers = matchingData.Any(zData => zData.ForceGeneratorClusterMarkers),
                 AllWorldEventLights = matchingData.SelectMany(zData => zData.AllWorldEventLights).ToArray(),
                 WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray(),
@@ -58,6 +59,15 @@ public sealed class LayoutConfigManager : CustomConfigBase
         return false;
     }
 
+    public static bool TryRegisterARAFilter(string filter, GameObject go)
+    {
+        if (_currentARAFilters.TryAdd(filter, go.Pointer)) 
+            return true;
+
+        ARALogger.Debug($"Duplicates of filter \"{filter}\" will be illegible for LiveEdit mid-level and ARAObjectsToActivate");
+        return false;
+    }
+
     public override string ModulePath => Module + "/LevelLayout";
 
     public override void Setup()
@@ -83,16 +93,15 @@ public sealed class LayoutConfigManager : CustomConfigBase
             }
         }
 
-        var listener = LiveEdit.CreateListener(ModulePath, "*.json", true);
-        listener.FileCreated += FileCreated;
-        listener.FileChanged += FileChanged;
-        listener.FileDeleted += FileDeleted;
+        var sfsw = SafeFileSystemWatcher.Create(ModulePath, new[] { "*.json" }, true);
+        sfsw.OnCreated += FileCreated;
+        sfsw.OnChanged += FileChanged;
+        sfsw.OnDeleted += FileDeleted;
     }
 
     private static uint ReadFileContent(string file, string content) // returns MainLayoutID
     {
         var layoutSet = _filepathLayoutMap.GetOrAddNew(file);
-
         foreach (uint id in layoutSet)
         {
             _customLayoutData.Remove(id);
@@ -105,80 +114,82 @@ public sealed class LayoutConfigManager : CustomConfigBase
             layoutSet.Add(data.MainLevelLayout);
             _customLayoutData[data.MainLevelLayout] = data;
         }
-
         return data?.MainLevelLayout ?? 0u;
     }
 
-    private void FileCreated(LiveEditEventArgs e)
+    private void FileCreated(FileEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file created: {e.FullPath}");
-        LiveEdit.TryReadFileContent(e.FullPath, (content) =>
-        {
-            ReadFileContent(e.FullPath, content);
-        });
+        ReadFileContent(e.FullPath, e.ReadContent());
     }
 
-    private void FileChanged(LiveEditEventArgs e)
+    private void FileChanged(FileEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file changed: {e.FullPath}");
-        LiveEdit.TryReadFileContent(e.FullPath, (content) =>
+        uint changedLayoutID = ReadFileContent(e.FullPath, e.ReadContent());
+        if (Current == LayoutConfigDefinition.Empty || Current.MainLevelLayout != changedLayoutID || GameStateManager.CurrentStateName != eGameStateName.InLevel)
+            return; // early exit if not in current level
+
+        foreach (var weData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.WorldEventObjects))
         {
-            uint changedLayoutID = ReadFileContent(e.FullPath, content);
-            if (Current == LayoutConfigDefinition.Empty || Current.MainLevelLayout != changedLayoutID || GameStateManager.CurrentStateName != eGameStateName.InLevel)
-                return; // early exit if not in current level
+            if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || weData.UseExistingFilterInArea || weData.UseRandomPosition)
+                continue;
 
-            foreach (var weData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.WorldEventObjects))
+            GameObject weObj = new(ptr);
+            if (!weObj.HasComponent<LG_WorldEventObject>()) continue;
+            weObj.transform.position = weData.Position;
+            weObj.transform.rotation = Quaternion.Euler(weData.Rotation);
+            weObj.transform.localScale = weData.Scale;
+
+            if (!weObj.TryAndGetComponent<Collider>(out var collider))
+                continue;
+
+            foreach (var weComp in weData.Components.Values)
             {
-                if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || weData.UseExistingFilterInArea || weData.UseRandomPosition)
-                    continue;
-
-                LG_WorldEventObject weObj = new(ptr);
-                weObj.transform.position = weData.Position;
-                weObj.transform.rotation = Quaternion.Euler(weData.Rotation);
-                weObj.transform.localScale = weData.Scale;
-
-                if (!weObj.gameObject.TryAndGetComponent<Collider>(out var collider))
-                    continue;
-
-                foreach (var weComp in weData.Components.Values)
+                switch (weComp.ColliderType)
                 {
-                    switch (weComp.ColliderType)
-                    {
-                        case ColliderType.Box:
-                            var box = collider.Cast<BoxCollider>();
-                            box.center = weComp.Center;
-                            box.size = weComp.Size;
-                            break;
+                    case ColliderType.Box:
+                        var box = collider.Cast<BoxCollider>();
+                        box.center = weComp.Center;
+                        box.size = weComp.Size;
+                        break;
 
-                        case ColliderType.Sphere:
-                            var sphere = collider.Cast<SphereCollider>();
-                            sphere.center = weComp.Center;
-                            sphere.radius = weComp.Radius;
-                            break;
+                    case ColliderType.Sphere:
+                        var sphere = collider.Cast<SphereCollider>();
+                        sphere.center = weComp.Center;
+                        sphere.radius = weComp.Radius;
+                        break;
 
-                        case ColliderType.Capsule:
-                            var capsule = collider.Cast<CapsuleCollider>();
-                            capsule.center = weComp.Center;
-                            capsule.radius = weComp.Radius;
-                            capsule.height = weComp.Height;
-                            break;
-                    }
+                    case ColliderType.Capsule:
+                        var capsule = collider.Cast<CapsuleCollider>();
+                        capsule.center = weComp.Center;
+                        capsule.radius = weComp.Radius;
+                        capsule.height = weComp.Height;
+                        break;
                 }
             }
-        });
+        }
+
+        foreach (var wallData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.InvisibleWalls))
+        {
+            if (!_currentARAFilters.TryGetValue(wallData.Filter, out var ptr))
+                continue;
+
+            GameObject wallObj = new(ptr);
+            wallObj.transform.position = wallData.Position;
+            wallObj.transform.rotation = Quaternion.Euler(wallData.Rotation);
+            wallObj.transform.localScale = wallData.Scale;
+        }
     }
 
-    private void FileDeleted(LiveEditEventArgs e)
+    private void FileDeleted(FileEventArgs e)
     {
         ARALogger.Warn($"LiveEdit file deleted: {e.FullPath}");
-        LiveEdit.TryReadFileContent(e.FullPath, (content) =>
+        foreach (uint id in _filepathLayoutMap[e.FullPath])
         {
-            foreach (uint id in _filepathLayoutMap[e.FullPath])
-            {
-                _customLayoutData.Remove(id);
-            }
-            _filepathLayoutMap.Remove(e.FullPath);
-        });
+            _customLayoutData.Remove(id);
+        }
+        _filepathLayoutMap.Remove(e.FullPath);
     }
 
     public override void OnBuildStart()
@@ -191,15 +202,27 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     public override void OnBeforeBatchBuild(LG_Factory.BatchName batch)
     {
-        if (batch != LG_Factory.BatchName.CustomObjectCollection) return;
-        ARALogger.Debug("Applying layout data");
-        WE_ObjectCustomData.AllocatePreexistingWorldEventObjects();
-        foreach (var zone in Builder.CurrentFloor.allZones)
+        switch (batch)
         {
-            AddWorldEventObjectsToTerminals(zone);
-            ApplyLayoutZoneData(zone);
-        }
-        SetupAnimationTriggers();
+            case LG_Factory.BatchName.FunctionMarkerFallback:
+                ARALogger.Debug("Adding spawnpoints and invisible walls");
+                foreach (var zoneData in Current.Zones)
+                {
+                    zoneData.AddSpawnPointsAndInvisibleWalls();
+                }
+                break;
+
+            case LG_Factory.BatchName.CustomObjectCollection:
+                ARALogger.Debug("Adding world event objects");
+                WE_ObjectCustomData.AllocatePreexistingWorldEventObjects();
+                foreach (var zone in Builder.CurrentFloor.allZones)
+                {
+                    AddWorldEventObjectsToTerminals(zone);
+                    ApplyLayoutZoneData(zone);
+                }
+                SetupAnimationTriggers();
+                break;
+        }        
     }
 
     public override void OnEnterLevel() // fix cargo with dimension level layouts
@@ -219,10 +242,9 @@ public sealed class LayoutConfigManager : CustomConfigBase
     {
         if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) return;
 
-        /* Add Spawnpoints to Zone Areas */
-        zoneData.AddSpawnPoints();
-        zoneData.InjectStaticDimensionWorldEventData();
+        /* Add Auto & Static WE Objects */
         AddWorldEventObjectsToLights(zone, zoneData.AllWorldEventLights);
+        zoneData.InjectStaticDimensionWorldEventData();
 
         /* Add Custom WE Objects */
         foreach (var weData in zoneData.WorldEventObjects)
@@ -232,10 +254,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 weObj = weData.Area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
                 weObj.transform.SetPositionRotationScale(weData.Position, weData.Rotation, weData.Scale);
                 weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                if (!_currentARAFilters.TryAdd(weData.WorldEventObjectFilter, weObj.Pointer))
-                {
-                    ARALogger.Debug($"Duplicates of WorldEventObjectFilter \"{weData.WorldEventObjectFilter}\" will be illegible for LiveEdit mid-level");
-                }
+                TryRegisterARAFilter(weData.WorldEventObjectFilter, weObj.gameObject);
             }
             if (weObj == null) continue;
 
@@ -307,12 +326,14 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         interactTrigger.m_interactionText = weComp.InteractionText;
                         interactTrigger.m_isToggle = weComp.IsToggle;
                         interactTrigger.m_insertType = weComp.CarryItemInsertType;
-                        interactTrigger.m_carryAlign ??= new()
+                        if (interactTrigger.m_carryAlign == null)
                         {
-                            position = weComp.CarryItemTransform.Position,
-                            rotation = weComp.CarryItemTransform.Rotation.ToQuaternion(),
-                            localScale = weComp.CarryItemTransform.Scale
-                        };
+                            var carryAlignGO = new GameObject("CarryAlign");
+                            carryAlignGO.transform.SetParent(weObj.transform, false);
+                            var carryTransform = weComp.CarryItemTransform ?? new();
+                            carryAlignGO.transform.SetPositionRotationScale(carryTransform.Position, carryTransform.Rotation, carryTransform.Scale);
+                            interactTrigger.m_carryAlign = carryAlignGO.transform;
+                        }
                         interactTrigger.m_removeItemOnInsert = weComp.RemoveItemOnInsert;
                         interactTrigger.m_itemStateAfterInsert = weComp.ItemStateAfterInsert;
                         break;
@@ -323,7 +344,8 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     private static void AddWorldEventObjectsToTerminals(LG_Zone zone)
     {
-        if (!Current.AllWorldEventTerminals) return;
+        if (!Current.AllWorldEventTerminals) 
+            return;
 
         string prefix = string.Format(Current.AutoWorldEventObjectPrefix, "Term");
         for (int i = 0; i < zone.TerminalsSpawnedInZone.Count; i++)
@@ -336,25 +358,29 @@ public sealed class LayoutConfigManager : CustomConfigBase
             weTerm.transform.localPosition = Vector3.zero;
             weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
         }
-        if (zone.gameObject.TryAndGetComponent<LG_WardenObjective_Reactor>(out var reactor))
+        foreach (var area in zone.m_areas)
         {
-            string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_Reactor";
-            var weTerm = reactor.m_terminalAlign?.AddChildGameObject<LG_WorldEventObject>(name);
-            if (weTerm == null) return;
-            weTerm.transform.localPosition = Vector3.zero;
-            weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+            if (area.m_geomorph.gameObject.TryAndGetComponent<LG_WardenObjective_Reactor>(out var reactor))
+            {
+                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_Reactor";
+                var weTerm = reactor.m_terminalAlign?.AddChildGameObject<LG_WorldEventObject>(name);
+                if (weTerm == null) continue;
+                weTerm.transform.localPosition = Vector3.zero;
+                weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                break;
+            }
         }
     }
 
     private static void AddWorldEventObjectsToLights(LG_Zone zone, int[] areas)
-    {       
+    {
         string prefix = string.Format(Current.AutoWorldEventObjectPrefix, "Light");
-        for (int area = 0, num = 0; area < zone.m_areas.Count; area++, num = 0)
+        for (int idx = 0, num = 0; idx < zone.m_areas.Count; idx++, num = 0)
         {
-            if (!areas.Contains(-1) && !areas.Contains(area)) continue;
-            foreach (var light in zone.m_areas[area].GetComponentsInChildren<LG_Light>(false))
+            if (!areas.Contains(-1) && !areas.Contains(idx)) continue;
+            foreach (var light in zone.m_areas[idx].GetComponentsInChildren<LG_Light>(false))
             {
-                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{area}_{num++}";
+                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{idx}_{num++}";
                 var weLight = light.AddChildGameObject<LG_WorldEventObject>(name);
                 weLight.transform.localPosition = Vector3.zero;
                 weLight.WorldEventComponents = Array.Empty<IWorldEventComponent>();
@@ -369,33 +395,34 @@ public sealed class LayoutConfigManager : CustomConfigBase
             if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || !weData.Components.TryGetValue(WorldEventComponent.WE_AnimationTrigger, out var weComp))
                 continue;
 
-            List<GameObject> targets = new();
-            LG_WorldEventObject weObj = new(ptr);
+            GameObject weObj = new(ptr);
+            if (!weObj.HasComponent<LG_WorldEventObject>()) continue;
             var weAnimObj = weObj;
+            List<GameObject> targets = new();
 
             if (!weComp.WorldEventAnimationFilter.IsNullOrWhiteSpace())
             {
-                weAnimObj = weData.Area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
-                weAnimObj.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
-                weAnimObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                targets.Add(weObj.gameObject);
+                var weAnim = weData.Area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
+                weAnim.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
+                weAnim.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                weAnimObj = weAnim.gameObject;
+                targets.Add(weObj);
             }
             foreach (var filter in weComp.ARAObjectsToActivate)
             {
                 if (!_currentARAFilters.TryGetValue(filter, out var targetPtr)) continue;
-                LG_WorldEventObject targetObj = new(targetPtr);
-                targets.Add(targetObj.gameObject);
+                targets.Add(new(targetPtr));
             }
             if (targets.Count == 0) continue;
 
-            var weAnim = weAnimObj.gameObject.AddOrGetComponent<LG_WorldEventAnimationTrigger>();
-            weAnim.m_playResetOnSetup = weComp.PlayResetOnStartup;
-            weAnim.m_gameObjectsToActivateOnTrigger = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+            var weAnimTrigger = weAnimObj.AddOrGetComponent<LG_WorldEventAnimationTrigger>();
+            weAnimTrigger.m_playResetOnSetup = weComp.PlayResetOnStartup;
+            weAnimTrigger.m_gameObjectsToActivateOnTrigger = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
             {
                 GameObjectToSet = go,
                 ActivationMode = weComp.ActivationMode
             }).ToArray();
-            weAnim.m_gameObjectsToActivateOnReset = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
+            weAnimTrigger.m_gameObjectsToActivateOnReset = targets.Select(go => new LG_WorldEventAnimationTrigger.GameObjectActivationPair
             {
                 GameObjectToSet = go,
                 ActivationMode = !weComp.ActivationMode

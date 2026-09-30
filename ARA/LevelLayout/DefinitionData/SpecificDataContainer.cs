@@ -17,32 +17,34 @@ public enum TerminalPrefab
 }
 
 public sealed class SpecificDataContainer
-{    
+{
     private const string DefaultPrefab = "Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_Floor.prefab";
-    private static readonly Dictionary<TerminalPrefab, (string Prefab, string? Extra)> _prefabMap = new()
+    private const string MiniPrefab = "Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_Mini.prefab";
+    private readonly record struct PrefabSet(string Prefab, string? Extra = null);
+    private static readonly Dictionary<TerminalPrefab, PrefabSet> _prefabMap = new()
     {
-        [TerminalPrefab.Default] = (DefaultPrefab, null),
-        [TerminalPrefab.MiningCover] = ("Assets/AssetPrefabs/Complex/Mining/SubMarkers/Props/submarker_mining_cover_120x120x240/submarker_mining_cover_120x120x240_Terminal_t.prefab", null),
-        [TerminalPrefab.MiniTerminal] = ("Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_Mini.prefab", null),
-        [TerminalPrefab.ServiceCover] = ("Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Floodways_terminal_wall_120x120x240/Floodways_terminal_wall_120x120x240_01.prefab", null),
-        [TerminalPrefab.CyberDeck] = ("Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_CyberDeck.prefab", null),
-        [TerminalPrefab.DataCenterCube] = 
+        [TerminalPrefab.Default] = new(DefaultPrefab),
+        [TerminalPrefab.MiningCover] = new("Assets/AssetPrefabs/Complex/Mining/SubMarkers/Props/submarker_mining_cover_120x120x240/submarker_mining_cover_120x120x240_Terminal_t.prefab"),
+        [TerminalPrefab.MiniTerminal] = new(MiniPrefab),
+        [TerminalPrefab.ServiceCover] = new("Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Floodways_terminal_wall_120x120x240/Floodways_terminal_wall_120x120x240_01.prefab"),
+        [TerminalPrefab.CyberDeck] = new("Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_CyberDeck.prefab"),
+        [TerminalPrefab.DataCenterCube] = new
         (
-            "Assets/AssetPrefabs/Complex/Tech/Markers/MarkerCompositions/DataCenter_submarker_240x240x400/DataCenter_submarker_240x240x400_V01_terminal.prefab",
-            "Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_Mini.prefab"
+            Prefab: "Assets/AssetPrefabs/Complex/Tech/Markers/MarkerCompositions/DataCenter_submarker_240x240x400/DataCenter_submarker_240x240x400_V01_terminal.prefab",
+            Extra: MiniPrefab
         ),
-        [TerminalPrefab.GardensCover] = 
+        [TerminalPrefab.GardensCover] = new
         (
-            "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_Concrete_Submarker_Station_180x180x240/Gardens_Concrete_Submarker_Station_180x180x240_V02.prefab",
-            "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_concrete_terminal_locker_200x300x50/Gardens_concrete_terminal_locker_200x300x50.prefab"
+            Prefab: "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_Concrete_Submarker_Station_180x180x240/Gardens_Concrete_Submarker_Station_180x180x240_V02.prefab",
+            Extra: "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_concrete_terminal_locker_200x300x50/Gardens_concrete_terminal_locker_200x300x50.prefab"
         ),
-        [TerminalPrefab.GardensShelf] = 
+        [TerminalPrefab.GardensShelf] = new
         (
-            "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_Concrete_Submarker_Station_180x180x240/Gardens_Concrete_Submarker_Station_180x180x240_V03.prefab",
-            "Assets/AssetPrefabs/Complex/Generic/FunctionMarkers/Terminal_Mini.prefab"
-        )        
+            Prefab: "Assets/AssetPrefabs/Complex/Service/MarkerCompositions/Gardens_Concrete_Submarker_Station_180x180x240/Gardens_Concrete_Submarker_Station_180x180x240_V03.prefab",
+            Extra: MiniPrefab
+        )
     };
-    
+
     public string WorldEventObjectFilter;
     public AIG_CourseNode SpawnNode;
     public TerminalPrefab TerminalPrefabOverride;

@@ -25,19 +25,19 @@ public enum ColliderType
     Capsule
 }
 
-public struct CustomTransform
+public class FilterTransform : CustomTransform
 {
-    public Vector3 Position { get; set; }
-    public Vector3 Rotation { get; set; }
-    public Vector3 Scale { get; set; }
+    public string Filter { get; set; } = string.Empty;
 
-    [JsonConstructor]
-    public CustomTransform(Vector3 position, Vector3 rotation, Vector3 scale)
-    {
-        Position = position;
-        Rotation = rotation;
-        Scale = scale == default ? Vector3.one : scale;
-    }
+    [JsonIgnore]
+    public bool HasFilter => !string.IsNullOrWhiteSpace(Filter);
+}
+
+public class CustomTransform
+{
+    public Vector3 Position { get; set; } = Vector3.zero;
+    public Vector3 Rotation { get; set; } = Vector3.zero;
+    public Vector3 Scale { get; set; } = Vector3.one;
 }
 
 public sealed class WE_ComponentCustomData
