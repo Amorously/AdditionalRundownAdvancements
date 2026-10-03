@@ -1,5 +1,4 @@
 ﻿using GameData;
-using System.Text.Json.Serialization;
 using UnityEngine;
 
 namespace ARA.LevelLayout.DefinitionData;
@@ -23,14 +22,6 @@ public enum ColliderType
     Box,
     Sphere,
     Capsule
-}
-
-public class FilterTransform : CustomTransform
-{
-    public string Filter { get; set; } = string.Empty;
-
-    [JsonIgnore]
-    public bool HasFilter => !string.IsNullOrWhiteSpace(Filter);
 }
 
 public class CustomTransform
@@ -61,5 +52,5 @@ public sealed class WE_ComponentCustomData
     public string WorldEventAnimationFilter { get; set; } = string.Empty;
     public bool PlayResetOnStartup { get; set; } = false;
     public bool ActivationMode { get; set; } = true;
-    public string[] ARAObjectsToActivate { get; set; } = Array.Empty<string>();
+    public HashSet<string> ARAObjectsToActivate { get; set; } = new();
 }

@@ -16,7 +16,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
     private static readonly Dictionary<string, HashSet<uint>> _filepathLayoutMap = new();
     private static readonly Dictionary<uint, LayoutConfigDefinition> _customLayoutData = new();
     private static readonly Dictionary<Vector3, SpecificDataContainer> _positionToContainerMap = new();
-    private static readonly Dictionary<string, IntPtr> _currentARAFilters = new();
+    private static readonly Dictionary<string, List<GameObject>> _currentARAFilters = new();
 
     public static bool TryGetCurrentZoneData(LG_Zone zone, [MaybeNullWhen(false)] out ZoneCustomData zoneData)
     {
@@ -32,7 +32,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
                 InvisibleWalls = matchingData.SelectMany(zData => zData.InvisibleWalls).ToArray(),
                 ForceGeneratorClusterMarkers = matchingData.Any(zData => zData.ForceGeneratorClusterMarkers),
-                AllWorldEventLights = matchingData.SelectMany(zData => zData.AllWorldEventLights).ToArray(),
+                AllWorldEventLights = matchingData.Any(zData => zData.AllWorldEventLights),
                 WorldEventObjects = matchingData.SelectMany(zData => zData.WorldEventObjects).ToArray(),
                 StaticEventsOnTrigger = matchingData.SelectMany(zData => zData.StaticEventsOnTrigger).ToList(),
                 StaticWorldEventChainedPuzzleDatas = matchingData.SelectMany(zData => zData.StaticWorldEventChainedPuzzleDatas).ToList(),
@@ -59,13 +59,9 @@ public sealed class LayoutConfigManager : CustomConfigBase
         return false;
     }
 
-    public static bool TryRegisterARAFilter(string filter, GameObject go)
+    internal static void AddARAFilter(string filter, GameObject go)
     {
-        if (_currentARAFilters.TryAdd(filter, go.Pointer)) 
-            return true;
-
-        ARALogger.Debug($"Duplicates of filter \"{filter}\" will be illegible for LiveEdit mid-level and ARAObjectsToActivate");
-        return false;
+        _currentARAFilters.GetOrAddNew(filter).Add(go);
     }
 
     public override string ModulePath => Module + "/LevelLayout";
@@ -132,36 +128,25 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
         foreach (var weData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.WorldEventObjects))
         {
-            if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || weData.UseExistingFilterInArea || weData.UseRandomPosition)
-                continue;
-
-            GameObject weObj = new(ptr);
-            if (!weObj.HasComponent<LG_WorldEventObject>()) continue;
-            weObj.transform.position = weData.Position;
-            weObj.transform.rotation = Quaternion.Euler(weData.Rotation);
-            weObj.transform.localScale = weData.Scale;
-
-            if (!weObj.TryAndGetComponent<Collider>(out var collider))
+            if (!TryGetAndRepositionObject(weData.WorldEventObjectFilter, weData.Transform, out var weObj, 
+                    weData.InstanceIndex, !weData.UseExistingFilterInArea && !weData.UseRandomPosition, go => go.HasComponent<LG_WorldEventObject>()))
                 continue;
 
             foreach (var weComp in weData.Components.Values)
             {
                 switch (weComp.ColliderType)
                 {
-                    case ColliderType.Box:
-                        var box = collider.Cast<BoxCollider>();
+                    case ColliderType.Box when weObj.TryAndGetComponent<BoxCollider>(out var box):
                         box.center = weComp.Center;
                         box.size = weComp.Size;
                         break;
 
-                    case ColliderType.Sphere:
-                        var sphere = collider.Cast<SphereCollider>();
+                    case ColliderType.Sphere when weObj.TryAndGetComponent<SphereCollider>(out var sphere):
                         sphere.center = weComp.Center;
                         sphere.radius = weComp.Radius;
                         break;
 
-                    case ColliderType.Capsule:
-                        var capsule = collider.Cast<CapsuleCollider>();
+                    case ColliderType.Capsule when weObj.TryAndGetComponent<CapsuleCollider>(out var capsule):
                         capsule.center = weComp.Center;
                         capsule.radius = weComp.Radius;
                         capsule.height = weComp.Height;
@@ -170,16 +155,32 @@ public sealed class LayoutConfigManager : CustomConfigBase
             }
         }
 
-        foreach (var wallData in _customLayoutData[changedLayoutID].Zones.SelectMany(zData => zData.InvisibleWalls))
+        foreach (var zData in _customLayoutData[changedLayoutID].Zones)
         {
-            if (!_currentARAFilters.TryGetValue(wallData.Filter, out var ptr))
-                continue;
-
-            GameObject wallObj = new(ptr);
-            wallObj.transform.position = wallData.Position;
-            wallObj.transform.rotation = Quaternion.Euler(wallData.Rotation);
-            wallObj.transform.localScale = wallData.Scale;
+            for (int i = 0; i < zData.InvisibleWalls.Length; i++)
+            {
+                var wall = zData.InvisibleWalls[i];
+                if (wall == null) continue;
+                TryGetAndRepositionObject(zData.GetSourceFilter("InvisWall", i), wall, out _);
+            }
         }
+    }
+
+    private static bool TryGetAndRepositionObject(string filter, CustomTransform transform, [MaybeNullWhen(false)] out GameObject go, 
+        int instanceIndex = 0, bool preCondition = true, Func<GameObject, bool>? postConditon = null) 
+    {
+        go = null;
+        if (!preCondition || !_currentARAFilters.TryGetValue(filter, out var list) || list.Count == 0)
+            return false;
+
+        int index = instanceIndex >= 0 && instanceIndex < list.Count ? instanceIndex : 0;
+        var target = list[index];
+        if (target == null || (postConditon != null && !postConditon(target)))
+            return false;
+
+        target.transform.SetPositionRotationScale(transform.Position, transform.Rotation, transform.Scale);
+        go = target;
+        return true;
     }
 
     private void FileDeleted(FileEventArgs e)
@@ -240,10 +241,11 @@ public sealed class LayoutConfigManager : CustomConfigBase
 
     private static void ApplyLayoutZoneData(LG_Zone zone)
     {
-        if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) return;
+        if (!TryGetCurrentZoneData(zone, out var zoneData) || zoneData?.Zone == null) 
+            return;
 
         /* Add Auto & Static WE Objects */
-        AddWorldEventObjectsToLights(zone, zoneData.AllWorldEventLights);
+        AddWorldEventObjectsToLights(zoneData);
         zoneData.InjectStaticDimensionWorldEventData();
 
         /* Add Custom WE Objects */
@@ -254,7 +256,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                 weObj = weData.Area.AddChildGameObject<LG_WorldEventObject>(weData.WorldEventObjectFilter);
                 weObj.transform.SetPositionRotationScale(weData.Position, weData.Rotation, weData.Scale);
                 weObj.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                TryRegisterARAFilter(weData.WorldEventObjectFilter, weObj.gameObject);
+                AddARAFilter(weData.WorldEventObjectFilter, weObj.gameObject);
             }
             if (weObj == null) continue;
 
@@ -328,10 +330,10 @@ public sealed class LayoutConfigManager : CustomConfigBase
                         interactTrigger.m_insertType = weComp.CarryItemInsertType;
                         if (interactTrigger.m_carryAlign == null)
                         {
-                            var carryAlignGO = new GameObject("CarryAlign");
-                            carryAlignGO.transform.SetParent(weObj.transform, false);
                             var carryTransform = weComp.CarryItemTransform ?? new();
+                            var carryAlignGO = new GameObject("CarryAlign");
                             carryAlignGO.transform.SetPositionRotationScale(carryTransform.Position, carryTransform.Rotation, carryTransform.Scale);
+                            carryAlignGO.transform.SetParent(weObj.transform, true);
                             interactTrigger.m_carryAlign = carryAlignGO.transform;
                         }
                         interactTrigger.m_removeItemOnInsert = weComp.RemoveItemOnInsert;
@@ -358,6 +360,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
             weTerm.transform.localPosition = Vector3.zero;
             weTerm.WorldEventComponents = Array.Empty<IWorldEventComponent>();
         }
+
         foreach (var area in zone.m_areas)
         {
             if (area.m_geomorph.gameObject.TryAndGetComponent<LG_WardenObjective_Reactor>(out var reactor))
@@ -372,15 +375,19 @@ public sealed class LayoutConfigManager : CustomConfigBase
         }
     }
 
-    private static void AddWorldEventObjectsToLights(LG_Zone zone, int[] areas)
+    private static void AddWorldEventObjectsToLights(ZoneCustomData zoneData)
     {
+        var zone = zoneData.Zone;
+        if (zone == null || !zoneData.AllWorldEventLights) 
+            return;
+        
         string prefix = string.Format(Current.AutoWorldEventObjectPrefix, "Light");
-        for (int idx = 0, num = 0; idx < zone.m_areas.Count; idx++, num = 0)
+        int num = 0;
+        for (int idx = 0; idx < zone.m_areas.Count; idx++)
         {
-            if (!areas.Contains(-1) && !areas.Contains(idx)) continue;
             foreach (var light in zone.m_areas[idx].GetComponentsInChildren<LG_Light>(false))
             {
-                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{idx}_{num++}";
+                string name = $"{prefix}{(int)zone.DimensionIndex}_{(int)zone.Layer.m_type}_{(int)zone.LocalIndex}_{num++}";
                 var weLight = light.AddChildGameObject<LG_WorldEventObject>(name);
                 weLight.transform.localPosition = Vector3.zero;
                 weLight.WorldEventComponents = Array.Empty<IWorldEventComponent>();
@@ -392,26 +399,24 @@ public sealed class LayoutConfigManager : CustomConfigBase
     {
         foreach (var weData in Current.Zones.SelectMany(zData => zData.WorldEventObjects))
         {
-            if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var ptr) || !weData.Components.TryGetValue(WorldEventComponent.WE_AnimationTrigger, out var weComp))
+            if (!_currentARAFilters.TryGetValue(weData.WorldEventObjectFilter, out var list) || !weData.Components.TryGetValue(WorldEventComponent.WE_AnimationTrigger, out var weComp))
                 continue;
 
-            GameObject weObj = new(ptr);
-            if (!weObj.HasComponent<LG_WorldEventObject>()) continue;
-            var weAnimObj = weObj;
             List<GameObject> targets = new();
-
+            var weObj = list.First();
+            var weAnimObj = weObj;
             if (!weComp.WorldEventAnimationFilter.IsNullOrWhiteSpace())
             {
-                var weAnim = weData.Area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
-                weAnim.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
-                weAnim.WorldEventComponents = Array.Empty<IWorldEventComponent>();
-                weAnimObj = weAnim.gameObject;
+                var weAnimHolder = weData.Area.AddChildGameObject<LG_WorldEventObject>(weComp.WorldEventAnimationFilter);
+                weAnimHolder.transform.position = new(weData.Position.x, weData.Position.y + 1f, weData.Position.z);
+                weAnimHolder.WorldEventComponents = Array.Empty<IWorldEventComponent>();
+                weAnimObj = weAnimHolder.gameObject;
                 targets.Add(weObj);
             }
             foreach (var filter in weComp.ARAObjectsToActivate)
             {
-                if (!_currentARAFilters.TryGetValue(filter, out var targetPtr)) continue;
-                targets.Add(new(targetPtr));
+                if (!_currentARAFilters.TryGetValue(filter, out var targetList)) continue;
+                targets.AddRange(targetList);
             }
             if (targets.Count == 0) continue;
 

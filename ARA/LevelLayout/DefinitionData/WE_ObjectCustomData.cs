@@ -8,6 +8,7 @@ namespace ARA.LevelLayout.DefinitionData;
 public sealed class WE_ObjectCustomData // todo: maybe immutable members?
 {
     public string WorldEventObjectFilter { get; set; } = string.Empty;
+    public int InstanceIndex { get; set; } = 0;
     public int AreaIndex { get; set; } = 0;
     public bool UseExistingFilterInArea { get; set; } = false;
     public bool UseRandomPosition { get; set; } = false;
@@ -18,6 +19,7 @@ public sealed class WE_ObjectCustomData // todo: maybe immutable members?
     public Dictionary<WorldEventComponent, WE_ComponentCustomData> Components { get; set; } = new();
 
     internal LG_Area Area { get; private set; } = null!;
+    internal CustomTransform Transform => new() { Position = Position, Rotation = Rotation, Scale = Scale };
 
     private static ILookup<int, LG_WorldEventObject> _preAllocWE = null!;
     private static System.Random _weRand = null!;

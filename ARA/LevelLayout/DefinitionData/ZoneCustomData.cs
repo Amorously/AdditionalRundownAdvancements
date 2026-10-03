@@ -14,10 +14,10 @@ public sealed class ZoneCustomData : GlobalBase
     public Vector3[] HibernateSpawnAligns { get; set; } = Array.Empty<Vector3>();
     public Vector3[] EnemySpawnPoints { get; set; } = Array.Empty<Vector3>();
     public Vector3[] BioscanSpawnPoints { get; set; } = Array.Empty<Vector3>();
-    public FilterTransform[] InvisibleWalls { get; set; } = Array.Empty<FilterTransform>();
+    public CustomTransform[] InvisibleWalls { get; set; } = Array.Empty<CustomTransform>();
     public bool ForceGeneratorClusterMarkers { get; set; } = false;
-    [JsonPropertyName("SetupWorldEventObjectOnLightsInArea")]
-    public int[] AllWorldEventLights { get; set; } = Array.Empty<int>();
+    [JsonPropertyName("SetupWorldEventObjectOnLightsInZone")]
+    public bool AllWorldEventLights { get; set; } = false;
     public WE_ObjectCustomData[] WorldEventObjects { get; set; } = Array.Empty<WE_ObjectCustomData>();
     public List<WorldEventFromSourceData> StaticEventsOnTrigger { get; set; } = new();
     public List<StaticDimensionWECPData> StaticWorldEventChainedPuzzleDatas { get; set; } = new();
@@ -30,6 +30,11 @@ public sealed class ZoneCustomData : GlobalBase
         AddSpawnPoints("ESP", EnemySpawnPoints, area => area.m_enemySpawnPoints);
         AddSpawnPoints("SBP", BioscanSpawnPoints, area => area.m_bioscanSpawnPoints);
         AddInvisibleWalls();
+    }
+
+    public string GetSourceFilter(string source, int index)
+    {
+        return $"ARA_{source}_{(int)DimensionIndex}_{(int)Layer}_{(int)LocalIndex}_{index}";
     }
 
     private void AddSpawnPoints(string source, Vector3[] positions, Func<LG_Area, Il2CppSystem.Collections.Generic.List<Transform>> targetList)
@@ -56,15 +61,14 @@ public sealed class ZoneCustomData : GlobalBase
             if (wall == null) continue;
             var area = CourseNodeUtil.GetCourseNode(wall.Position, DimensionIndex)?.m_area;
             if (area == null) continue;
-            string name = $"ARA_InvisWall_{(int)area.m_zone.DimensionIndex}_{(int)area.m_zone.Layer.m_type}_{(int)area.m_zone.LocalIndex}";
-            if (i > 0) name += $" ({i})";
+            string name = GetSourceFilter("InvisWall", i);
             var go = new GameObject(name) { layer = 13 };
-            go.transform.SetParent(area.transform, false); 
             go.transform.SetPositionRotationScale(wall.Position, wall.Rotation, wall.Scale);
+            go.transform.SetParent(area.transform, true); 
             var box = go.AddComponent<BoxCollider>();
             box.center = Vector3.zero;
             box.size = Vector3.one;
-            LayoutConfigManager.TryRegisterARAFilter(wall.HasFilter ? wall.Filter : name, go);
+            LayoutConfigManager.AddARAFilter(name, go);
         }
     }
 
