@@ -27,6 +27,11 @@ public sealed class LayoutConfigManager : CustomConfigBase
             1 => matchingData[0],
             _ => new ZoneCustomData
             {
+                Dimension = zone.Dimension,
+                Zone = zone,
+                DimensionIndex = zone.DimensionIndex,
+                Layer = zone.Layer.m_type,
+                LocalIndex = zone.LocalIndex,
                 HibernateSpawnAligns = matchingData.SelectMany(zData => zData.HibernateSpawnAligns).ToArray(),
                 EnemySpawnPoints = matchingData.SelectMany(zData => zData.EnemySpawnPoints).ToArray(),
                 BioscanSpawnPoints = matchingData.SelectMany(zData => zData.BioscanSpawnPoints).ToArray(),
@@ -155,8 +160,11 @@ public sealed class LayoutConfigManager : CustomConfigBase
             }
         }
 
-        foreach (var zData in _customLayoutData[changedLayoutID].Zones)
+        foreach (var zone in Builder.CurrentFloor.allZones)
         {
+            if (!TryGetCurrentZoneData(zone, out var zData)) 
+                continue;
+
             for (int i = 0; i < zData.InvisibleWalls.Length; i++)
             {
                 var wall = zData.InvisibleWalls[i];
@@ -173,8 +181,8 @@ public sealed class LayoutConfigManager : CustomConfigBase
         if (!preCondition || !_currentARAFilters.TryGetValue(filter, out var list) || list.Count == 0)
             return false;
 
-        int index = instanceIndex >= 0 && instanceIndex < list.Count ? instanceIndex : 0;
-        var target = list[index];
+        int idx = instanceIndex >= 0 && instanceIndex < list.Count ? instanceIndex : 0;
+        var target = list[idx];
         if (target == null || (postConditon != null && !postConditon(target)))
             return false;
 
@@ -207,8 +215,9 @@ public sealed class LayoutConfigManager : CustomConfigBase
         {
             case LG_Factory.BatchName.FunctionMarkerFallback:
                 ARALogger.Debug("Adding spawnpoints and invisible walls");
-                foreach (var zoneData in Current.Zones)
+                foreach (var zone in Builder.CurrentFloor.allZones)
                 {
+                    if (!TryGetCurrentZoneData(zone, out var zoneData)) continue;
                     zoneData.AddSpawnPointsAndInvisibleWalls();
                 }
                 break;
