@@ -32,9 +32,10 @@ internal static class ElevatorCargoPatches
 
     [HarmonyPostfix]
     [HarmonyWrapSafe]
-    private static void Post_SpawnItems(ElevatorCargoCage __instance, bool __runOriginal, ElevatorCargoCustomData? __state)
+    private static void Post_SpawnItems(ElevatorCargoCage __instance, ElevatorCargoCustomData? __state)
     {
-        if (!__runOriginal || __state == null || __state.CargoItems.Length == 0) return;
+        if (__state == null || __state.DisableElevatorCargo || __state.CargoItems.Length == 0)
+                return;
 
         __instance.m_itemsToMoveToCargo ??= new();
         foreach (var itemID in __state.CargoItems)
