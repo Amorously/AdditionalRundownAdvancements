@@ -6,21 +6,22 @@ using HarmonyLib;
 
 namespace ARA;
 
-[BepInPlugin("Amor.ARA", MODNAME, "0.6.1")]
+[BepInPlugin("Amor.ARA", MODNAME, "0.6.2")]
 [BepInDependency("dev.gtfomodding.gtfo-api", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("com.dak.MTFO", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("Amor.AmorLib", BepInDependency.DependencyFlags.HardDependency)]
-[BepInDependency(PData_Wrapper.PLUGIN_GUID, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(InjectLib_Wrapper.PLUGIN_GUID, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(PartialData_Wrapper.PLUGIN_GUID, BepInDependency.DependencyFlags.SoftDependency)]
 internal sealed class EntryPoint : BasePlugin
 {
     public const string MODNAME = "AdditionalRundownAdvancements";
 
     public override void Load()
     {
+        ARALogger.MLS = Log;
         new Harmony("Amor.ARA").PatchAll();
         AssetAPI.OnStartupAssetsLoaded += OnStartupAssetsLoaded; 
-        ARALogger.Info("ARA is done loading!");
+        ARALogger.Message("ARA is done loading!");
     }
 
     private void OnStartupAssetsLoaded()

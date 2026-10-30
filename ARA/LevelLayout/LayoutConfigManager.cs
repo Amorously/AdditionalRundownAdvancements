@@ -98,6 +98,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
         sfsw.OnCreated += FileCreated;
         sfsw.OnChanged += FileChanged;
         sfsw.OnDeleted += FileDeleted;
+        sfsw.OnRenamed += FileRenamed;
     }
 
     private static uint ReadFileContent(string file, string content) // returns MainLayoutID
@@ -199,6 +200,17 @@ public sealed class LayoutConfigManager : CustomConfigBase
             _customLayoutData.Remove(id);
         }
         _filepathLayoutMap.Remove(e.FullPath);
+    }
+
+    private static void FileRenamed(FileRenamedEventArgs e)
+    {
+        (string oldPath, string path) = (e.OldFullPath, e.FullPath);
+        ARALogger.Warn($"LiveEdit file renamed: {path}");
+        if (_filepathLayoutMap.ContainsKey(oldPath))
+        {
+            _filepathLayoutMap[path] = _filepathLayoutMap[oldPath];
+            _filepathLayoutMap.Remove(oldPath);
+        }
     }
 
     public override void OnBuildStart()

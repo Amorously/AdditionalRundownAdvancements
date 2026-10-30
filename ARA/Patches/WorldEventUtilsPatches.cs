@@ -194,7 +194,6 @@ internal static class WorldEventUtilsPatches
         if (nodeHandler == null) return false;
         nodeHandler.SpawnNode = container.SpawnNode;
         spawnedObject = terminal.Pointer;
-
         return spawnedObject != IntPtr.Zero;
     }
 

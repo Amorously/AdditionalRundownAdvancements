@@ -26,7 +26,6 @@ internal static class ElevatorCargoPatches
             ElevatorRide.Current.m_cargoCageInUse = false;
             return false;
         }
-
         return !__state.OverrideCargoItems;
     }
 
@@ -34,8 +33,10 @@ internal static class ElevatorCargoPatches
     [HarmonyWrapSafe]
     private static void Post_SpawnItems(ElevatorCargoCage __instance, ElevatorCargoCustomData? __state)
     {
-        if (__state == null || __state.DisableElevatorCargo || __state.CargoItems.Length == 0)
-                return;
+        if (__state == null || __state.CargoItems.Length == 0)
+            return;
+        else if (__state.DisableElevatorCargo)
+            ARALogger.Warn($"CustomElevatorCargoItems has {__state.CargoItems.Length} items, but DisableElevatorCargo is true. Is this intentional?");
 
         __instance.m_itemsToMoveToCargo ??= new();
         foreach (var itemID in __state.CargoItems)
@@ -74,7 +75,6 @@ internal static class ElevatorCargoPatches
 
             __instance.m_itemsToMoveToCargo.Add(customItem.transform);
         }
-
         ElevatorRide.Current.m_cargoCageInUse = true;
     }
 }
