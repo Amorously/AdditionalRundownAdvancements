@@ -18,7 +18,6 @@ internal sealed class EntryPoint : BasePlugin
 
     public override void Load()
     {
-        ARALogger.MLS = Log;
         new Harmony("Amor.ARA").PatchAll();
         AssetAPI.OnStartupAssetsLoaded += OnStartupAssetsLoaded; 
         ARALogger.Message("ARA is done loading!");

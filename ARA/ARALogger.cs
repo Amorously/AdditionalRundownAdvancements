@@ -5,7 +5,7 @@ namespace ARA;
 
 internal static class ARALogger
 {
-    public static ManualLogSource MLS { get; internal set; } = null!;
+    internal static readonly ManualLogSource MLS = Logger.CreateLogSource("ARA");
 
     public static void Error(BepInExErrorLogInterpolatedStringHandler handler) => MLS.LogError(handler);
     public static void Error(string str) => MLS.LogError(str);
