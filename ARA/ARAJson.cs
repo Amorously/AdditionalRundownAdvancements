@@ -6,7 +6,7 @@ namespace ARA;
 
 internal static class ARAJson
 {
-    private static readonly JsonSerializerOptions _setting = JsonSerializerUtil.CreateDefaultSettings(true, PData_Wrapper.IsLoaded, InjectLib_Wrapper.IsLoaded);
+    private static readonly JsonSerializerOptions _setting = JsonSerializerUtil.CreateDefaultSettings(true, PartialData_Wrapper.IsLoaded, InjectLib_Wrapper.IsLoaded);
 
     public static T Deserialize<T>(string json)
     {
