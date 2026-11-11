@@ -138,7 +138,7 @@ public sealed class LayoutConfigManager : CustomConfigBase
                     weData.InstanceIndex, !weData.UseExistingFilterInArea && !weData.UseRandomPosition, go => go.HasComponent<LG_WorldEventObject>()))
                 continue;
 
-            foreach (var weComp in weData.Components.Values)
+            foreach (var weComp in weData.Components.Values.Where(cData => cData != null))
             {
                 switch (weComp.ColliderType)
                 {
